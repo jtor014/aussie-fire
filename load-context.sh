@@ -79,8 +79,50 @@ EOF
     cat TODO.md >> claude-context.md
 fi
 
+# Add feature specifications if exists
+if [ -f "feature-specs.md" ]; then
+    cat >> claude-context.md << 'EOF'
+
+## Feature Specifications
+EOF
+    cat feature-specs.md >> claude-context.md
+fi
+
 # Add a summary of what Claude should know
 cat >> claude-context.md << 'EOF'
+
+## User Feedback & Feature Requests
+Based on expected user needs for Australian FIRE planning:
+
+### CRITICAL MISSING FEATURE: Couples Mode
+- Most FIRE planners have partners/families
+- Current single-person calc unrealistic for majority
+- Need: Combined incomes, shared expenses, tax optimization
+- Need: Spousal super strategies, dual retirement planning
+
+### High Priority Enhancements
+1. **Die with Zero Enhancement**
+   - Add "leave inheritance" option
+   - Many users want to leave money for kids
+   - Show cost: "Leaving $500k = work 2 more years"
+
+2. **Lump Sum Events**
+   - Inheritance receipt (common in Australia)
+   - Property sale with CGT
+   - Redundancy packages
+   - Show impact on retirement date
+
+3. **Property Integration**
+   - Most Australian wealth in property
+   - PPOR vs investment property
+   - Downsizing at 60+ strategy
+
+## Implementation Priority Order
+1. Couples mode (affects majority of users)
+2. Lump sum handling (common scenario)
+3. Enhanced die with zero (parents need this)
+4. Property (complex, maybe phase 2)
+5. Monte Carlo (nice to have)
 
 ## Key Features Implemented
 - ✅ Australian tax calculations (2025-26)
