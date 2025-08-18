@@ -115,61 +115,102 @@
 
     const chartData = useMemo(() => {
       const data = [];
-      const { returnRate, tax, afterTaxIncome, annualSuperContribution } =
-  calculations;
+      const { returnRate, tax, afterTaxIncome, annualSuperContribution } = calculations;
       const annualSavings = afterTaxIncome - annualExpenses;
       const fireNumber = annualExpenses * 25;
 
+      // Initialize starting balances
+      let outsideSuper = currentSavings;
+      let superBalance = currentSuper;
+      let spendToZeroOutside = currentSavings;
+      let spendToZeroSuper = currentSuper;
+
       for (let age = currentAge; age <= Math.max(90, lifeExpectancy + 5); age++) {
-        const yearsFromNow = age - currentAge;
-
-        // Calculate wealth accumulation phase (before retirement)
-        let outsideSuper = currentSavings * Math.pow(1 + returnRate, yearsFromNow);
-        let superBalance = currentSuper * Math.pow(1 + returnRate, yearsFromNow);
-        
-        if (annualSavings > 0 && yearsFromNow > 0 && age < retirementAge) {
-          outsideSuper += annualSavings * (Math.pow(1 + returnRate, yearsFromNow) - 1) / returnRate;
+        if (age === currentAge) {
+          // First year - just record starting values
+          data.push({
+            age,
+            outsideSuper: Math.max(0, outsideSuper),
+            superBalance: Math.max(0, superBalance),
+            totalWealth: Math.max(0, outsideSuper + superBalance),
+            spendToZeroWealth: Math.max(0, spendToZeroOutside + spendToZeroSuper),
+            fireNumber
+          });
+          continue;
         }
-        
-        if (yearsFromNow > 0 && age < retirementAge) {
-          superBalance += annualSuperContribution * (Math.pow(1 + returnRate, yearsFromNow) - 1) / returnRate;
+
+        // ACCUMULATION PHASE (before retirement)
+        if (age <= retirementAge) {
+          // Add annual savings and super contributions
+          if (annualSavings > 0) {
+            outsideSuper += annualSavings;
+            spendToZeroOutside += annualSavings;
+          }
+          superBalance += annualSuperContribution;
+          spendToZeroSuper += annualSuperContribution;
+
+          // Apply 7% growth
+          outsideSuper *= (1 + returnRate);
+          superBalance *= (1 + returnRate);
+          spendToZeroOutside *= (1 + returnRate);
+          spendToZeroSuper *= (1 + returnRate);
         }
-
-        let totalWealth = outsideSuper + superBalance;
-        let spendToZeroWealth = totalWealth;
-
-        // Calculate spend-to-zero trajectory after retirement
-        if (dieWithZeroMode && age >= retirementAge) {
-          const yearsIntoRetirement = age - retirementAge;
-          const retirementYears = lifeExpectancy - retirementAge;
-          
-          if (retirementYears > 0 && yearsIntoRetirement >= 0) {
-            // Calculate remaining wealth using spend-to-zero withdrawal
-            const totalWealthAtRetirement = calculations.totalWealth;
-            const spendToZeroAmount = calculations.spendToZeroAmount;
+        // RETIREMENT PHASE (after retirement)
+        else {
+          // Standard 4% withdrawal strategy
+          const totalWealth = outsideSuper + superBalance;
+          if (totalWealth > 0) {
+            // Withdraw annual expenses (4% of initial retirement wealth)
+            const withdrawalRate = annualExpenses / Math.max(1, calculations.totalWealth);
+            const withdrawal = totalWealth * withdrawalRate;
             
-            // Wealth depletes according to annuity payment schedule
-            const remainingYears = retirementYears - yearsIntoRetirement;
-            if (remainingYears > 0) {
-              const r = returnRate;
-              const n = remainingYears;
-              if (r > 0) {
-                spendToZeroWealth = spendToZeroAmount * (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n));
-              } else {
-                spendToZeroWealth = spendToZeroAmount * remainingYears;
-              }
+            // Withdraw from outside super first (can access before 60)
+            if (age < 60) {
+              outsideSuper = Math.max(0, outsideSuper - withdrawal);
             } else {
-              spendToZeroWealth = 0; // Depleted by life expectancy
+              // After 60, can withdraw from both proportionally
+              const outsideRatio = outsideSuper / totalWealth;
+              const superRatio = superBalance / totalWealth;
+              outsideSuper = Math.max(0, outsideSuper - (withdrawal * outsideRatio));
+              superBalance = Math.max(0, superBalance - (withdrawal * superRatio));
+            }
+
+            // Apply 7% growth to remaining balance
+            outsideSuper *= (1 + returnRate);
+            superBalance *= (1 + returnRate);
+          }
+
+          // Spend-to-zero strategy (withdraw more to deplete by life expectancy)
+          if (dieWithZeroMode) {
+            const spendToZeroTotal = spendToZeroOutside + spendToZeroSuper;
+            if (spendToZeroTotal > 0 && calculations.spendToZeroAmount > 0) {
+              const spendToZeroWithdrawal = calculations.spendToZeroAmount;
+              
+              // Withdraw from outside super first (before 60)
+              if (age < 60) {
+                spendToZeroOutside = Math.max(0, spendToZeroOutside - spendToZeroWithdrawal);
+              } else {
+                // After 60, withdraw proportionally
+                const outsideRatio = spendToZeroOutside / spendToZeroTotal;
+                const superRatio = spendToZeroSuper / spendToZeroTotal;
+                spendToZeroOutside = Math.max(0, spendToZeroOutside - (spendToZeroWithdrawal * outsideRatio));
+                spendToZeroSuper = Math.max(0, spendToZeroSuper - (spendToZeroWithdrawal * superRatio));
+              }
+
+              // Apply 7% growth to remaining balance
+              spendToZeroOutside *= (1 + returnRate);
+              spendToZeroSuper *= (1 + returnRate);
             }
           }
         }
 
+        // Record the values for this age
         data.push({
           age,
           outsideSuper: Math.max(0, outsideSuper),
           superBalance: Math.max(0, superBalance),
-          totalWealth: Math.max(0, totalWealth),
-          spendToZeroWealth: dieWithZeroMode ? Math.max(0, spendToZeroWealth) : totalWealth,
+          totalWealth: Math.max(0, outsideSuper + superBalance),
+          spendToZeroWealth: dieWithZeroMode ? Math.max(0, spendToZeroOutside + spendToZeroSuper) : (outsideSuper + superBalance),
           fireNumber
         });
       }
