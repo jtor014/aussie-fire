@@ -11,7 +11,13 @@
       "Bash(git push:*)",
       "Bash(git remote set-url:*)",
       "Bash(gh repo create:*)",
-      "Bash(git remote remove:*)"
+      "Bash(git remote remove:*)",
+      "Bash(rm:*)",
+      "Bash(cp:*)",
+      "Bash(chmod:*)",
+      "Bash(./load-context.sh:*)",
+      "Bash(./start-session.sh:*)",
+      "Bash(./quick-snapshot.sh:*)"
     ],
     "deny": [],
     "ask": []

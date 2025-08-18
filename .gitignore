@@ -69,3 +69,9 @@ temp/
 *.njsproj
 *.sln
 *.sw?
+
+# Claude context files
+claude-context.md
+claude-prompt.txt
+QUICK_CONTEXT.md
+CLAUDE_SNAPSHOT.md

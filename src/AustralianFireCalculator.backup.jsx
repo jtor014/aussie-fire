@@ -13,10 +13,7 @@ const AustralianFireCalculator = () => {
   const [lifeExpectancy, setLifeExpectancy] = useState(90);
 
   // Assumptions Panel
-  const [showAssumptions, setShowAssumptions] = useState(() => {
-    const saved = localStorage.getItem('aussie-fire-assumptions-open');
-    return saved ? JSON.parse(saved) : false;
-  });
+  const [showAssumptions, setShowAssumptions] = useState(true);
   const [expectedReturn, setExpectedReturn] = useState(8.5);
   const [investmentFees, setInvestmentFees] = useState(0.5);
   const [safeWithdrawalRate, setSafeWithdrawalRate] = useState(3.5);
@@ -25,10 +22,6 @@ const AustralianFireCalculator = () => {
   const [showInTodaysDollars, setShowInTodaysDollars] = useState(true);
   const [hecsDebt, setHecsDebt] = useState(0);
   const [hasPrivateHealth, setHasPrivateHealth] = useState(false);
-
-  // Collapsible subsections within Your Situation
-  const [showTaxSection, setShowTaxSection] = useState(false);
-  const [showSuperSection, setShowSuperSection] = useState(false);
 
   // Advanced Super Strategy
   const [showAdvancedSuper, setShowAdvancedSuper] = useState(() => {
@@ -43,16 +36,6 @@ const AustralianFireCalculator = () => {
     income: 0
   });
   const [showItemizedInsurance, setShowItemizedInsurance] = useState(false);
-
-  // Spacing constants for consistent layout
-  const spacing = {
-    xs: '4px',
-    sm: '8px',
-    md: '12px',
-    lg: '16px',
-    xl: '20px',
-    xxl: '24px'
-  };
 
   // Calculated assumptions
   const netReturn = (expectedReturn - investmentFees) / 100;
@@ -218,11 +201,6 @@ const AustralianFireCalculator = () => {
     localStorage.setItem('aussie-fire-advanced-super-open', JSON.stringify(showAdvancedSuper));
   }, [showAdvancedSuper]);
 
-  // Save assumptions accordion state to localStorage
-  useEffect(() => {
-    localStorage.setItem('aussie-fire-assumptions-open', JSON.stringify(showAssumptions));
-  }, [showAssumptions]);
-
   // HECS calculation function
   const calculateHecs = (income) => {
     if (hecsDebt <= 0) return 0;
@@ -253,7 +231,7 @@ const AustralianFireCalculator = () => {
     return Math.min(income * bracket.rate / 100, hecsDebt);
   };
 
-  // Australian tax brackets 2025-26 with Medicare Levy
+  // Australian tax brackets 2024-25 with Medicare Levy
   const calculateTax = (income) => {
     let tax = 0;
     
@@ -459,7 +437,7 @@ const AustralianFireCalculator = () => {
       returnRate,
       tax,
       afterTaxIncome,
-      annualSuperContribution: totalAnnualSuperContribution,
+      annualSuperContribution,
       isAlreadyRetired,
       spendingBonus: Math.max(0, spendToZeroAmount - withdrawalAmount),
       effectiveTaxRate,
@@ -600,7 +578,7 @@ const AustralianFireCalculator = () => {
 
   // Styling
   const cardStyle = {
-    maxWidth: '1200px',
+    maxWidth: '800px',
     margin: '20px auto',
     padding: '30px',
     backgroundColor: '#ffffff',
@@ -723,648 +701,59 @@ const AustralianFireCalculator = () => {
     backgroundColor: '#f8fafc',
     padding: '24px',
     borderRadius: '12px',
-    margin: '20px 0', // Remove auto margins for full width
+    marginTop: '20px',
   };
 
   return (
     <div style={cardStyle}>
       <h1 style={titleStyle}>🇦🇺 Australian FIRE Calculator</h1>
       
+      {/* Preset Scenarios */}
+      <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+        <h3 style={{ marginBottom: '12px', color: '#374151' }}>Quick Scenarios</h3>
+        <button style={buttonStyle} onClick={() => applyPreset('optimistic')}>
+          Optimistic (10%/4%)
+        </button>
+        <button style={buttonStyle} onClick={() => applyPreset('balanced')}>
+          Balanced (8.5%/3.5%)
+        </button>
+        <button style={buttonStyle} onClick={() => applyPreset('pessimistic')}>
+          Pessimistic (6%/3%)
+        </button>
+        <button style={buttonStyle} onClick={() => applyPreset('gfc')}>
+          GFC Stress (4%/2.5%)
+        </button>
+      </div>
 
-
-      {/* Your Situation - PayCalculator Style */}
-      <div style={{
-        ...sectionStyle,
-        padding: '20px',
-        backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb'
-      }}>
-        <h3 style={{ color: '#374151', marginBottom: '20px', fontSize: '18px', fontWeight: '600' }}>
-          👤 Your Situation
-        </h3>
-        
-        {/* Basic Details - Always Visible */}
-        <div style={{
-          backgroundColor: '#f9fafb',
-          padding: spacing.xl,
-          borderRadius: '8px',
-          marginBottom: spacing.lg
-        }}>
-          <h4 style={{ 
-            fontSize: '14px', 
-            fontWeight: '600', 
-            color: '#374151', 
-            marginBottom: spacing.lg,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}>
-            Basic Details
-          </h4>
-          
-          {/* Age sliders - side by side */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr 1fr', 
-            gap: spacing.xxl,
-            marginBottom: spacing.xl
-          }}>
-            <div>
-              <label style={{ ...labelStyle, marginBottom: spacing.sm }}>
-                Current Age: <strong>{currentAge}</strong>
-              </label>
-              <input
-                type="range"
-                min="20"
-                max="60"
-                value={currentAge}
-                onChange={(e) => setCurrentAge(parseInt(e.target.value))}
-                style={sliderStyle}
-              />
-            </div>
-            
-            <div>
-              <label style={{ ...labelStyle, marginBottom: spacing.sm }}>
-                Target Retirement Age: <strong>{retirementAge}</strong>
-              </label>
-              <input
-                type="range"
-                min="30"
-                max="70"
-                value={retirementAge}
-                onChange={(e) => setRetirementAge(parseInt(e.target.value))}
-                style={sliderStyle}
-              />
-            </div>
-          </div>
-          
-          {/* Income and Expenses - better grid */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '2fr 1fr', 
-            gap: spacing.xxl,
-            alignItems: 'start'
-          }}>
-            <div>
-              <label style={{ ...labelStyle, marginBottom: spacing.sm }}>
-                Annual Income (pre-tax)
-              </label>
-              <input
-                type="number"
-                value={annualIncome}
-                onChange={(e) => setAnnualIncome(parseFloat(e.target.value) || 0)}
-                style={{ ...inputStyle, fontSize: '18px', fontWeight: '500' }}
-                placeholder="100000"
-              />
-              {/* Tax summary below income */}
-              {annualIncome > 0 && (
-                <div style={{ 
-                  marginTop: spacing.sm, 
-                  padding: `${spacing.sm} ${spacing.md}`,
-                  backgroundColor: '#f3f4f6',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  color: '#374151'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: spacing.lg }}>
-                    <span>After tax: <strong>${calculations.afterTaxIncome.toLocaleString()}</strong></span>
-                    <span>Tax: <strong>${calculations.tax.toLocaleString()}</strong> ({calculations.effectiveTaxRate.toFixed(0)}%)</span>
-                    <span>Super: <strong>${calculations.employerSuperContribution.toLocaleString()}</strong></span>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <div>
-              <label style={{ ...labelStyle, marginBottom: spacing.sm }}>
-                Annual Expenses
-              </label>
-              <input
-                type="number"
-                value={annualExpenses}
-                onChange={(e) => setAnnualExpenses(parseFloat(e.target.value) || 0)}
-                style={{ ...inputStyle, fontSize: '18px', fontWeight: '500' }}
-                placeholder="40000"
-              />
-              {/* Savings rate below expenses */}
-              {calculations.savingsRate > 0 && (
-                <div style={{ 
-                  marginTop: spacing.sm,
-                  fontSize: '13px',
-                  color: calculations.savingsRate > 50 ? '#059669' : calculations.savingsRate > 20 ? '#f59e0b' : '#dc2626',
-                  fontWeight: '600'
-                }}>
-                  Savings rate: {calculations.savingsRate.toFixed(1)}%
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Current Wealth - Always Visible */}
-        <div style={{
-          backgroundColor: '#f9fafb',
-          padding: spacing.xl,
-          borderRadius: '8px',
-          marginBottom: spacing.lg
-        }}>
-          <h4 style={{ 
-            fontSize: '14px', 
-            fontWeight: '600', 
-            color: '#374151', 
-            marginBottom: spacing.lg,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}>
-            Current Wealth
-          </h4>
-          
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr 1fr', 
-            gap: spacing.xxl
-          }}>
-            <div>
-              <label style={{ ...labelStyle, marginBottom: spacing.sm }}>
-                Savings (outside super)
-              </label>
-              <input
-                type="number"
-                value={currentSavings}
-                onChange={(e) => setCurrentSavings(parseFloat(e.target.value) || 0)}
-                style={{ ...inputStyle, fontSize: '16px' }}
-                placeholder="50000"
-              />
-            </div>
-            
-            <div>
-              <label style={{ ...labelStyle, marginBottom: spacing.sm }}>
-                Superannuation Balance
-              </label>
-              <input
-                type="number"
-                value={currentSuper}
-                onChange={(e) => setCurrentSuper(parseFloat(e.target.value) || 0)}
-                style={{ ...inputStyle, fontSize: '16px' }}
-                placeholder="100000"
-              />
-            </div>
-          </div>
-          
-          {/* Total wealth summary */}
-          <div style={{ 
-            marginTop: spacing.lg,
-            padding: spacing.md,
-            backgroundColor: '#eff6ff',
-            borderRadius: '6px',
-            textAlign: 'center'
-          }}>
-            <span style={{ fontSize: '13px', color: '#6b7280' }}>Current Total Wealth: </span>
-            <strong style={{ fontSize: '16px', color: '#1d4ed8' }}>
-              ${(currentSavings + currentSuper).toLocaleString()}
-            </strong>
-          </div>
-        </div>
-
-        {/* Tax & Deductions - Collapsible */}
-        <div style={{
-          backgroundColor: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          marginBottom: spacing.md,
-          overflow: 'hidden'
-        }}>
-          <div 
-            onClick={() => setShowTaxSection(!showTaxSection)}
-            style={{ 
-              padding: `14px ${spacing.xl}`,
-              cursor: 'pointer',
-              backgroundColor: showTaxSection ? '#f9fafb' : '#ffffff',
-              borderBottom: showTaxSection ? '1px solid #e5e7eb' : 'none',
-              transition: 'background-color 0.2s ease'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                <span style={{ fontSize: '16px', color: '#6b7280' }}>
-                  {showTaxSection ? '−' : '+'}
-                </span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                  Tax & Deductions
-                </span>
-                {/* Status indicators */}
-                {(hecsDebt > 0 || !hasPrivateHealth) && (
-                  <span style={{ fontSize: '12px', color: '#dc2626' }}>
-                    {hecsDebt > 0 && '• HECS active'}
-                    {!hasPrivateHealth && ' • Medicare surcharge'}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {showTaxSection && (
-            <div style={{ padding: spacing.xl }}>
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr',
-                gap: spacing.xxl
-              }}>
-                <div>
-                  <label style={{ ...labelStyle, marginBottom: spacing.sm }}>HECS/HELP Debt</label>
-                  <input
-                    type="number"
-                    value={hecsDebt}
-                    onChange={(e) => setHecsDebt(parseFloat(e.target.value) || 0)}
-                    style={{ ...inputStyle, fontSize: '16px' }}
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm }}>
-                    <input
-                      type="checkbox"
-                      checked={hasPrivateHealth}
-                      onChange={(e) => setHasPrivateHealth(e.target.checked)}
-                      style={{ margin: 0 }}
-                    />
-                    Private Health Insurance
-                  </label>
-                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: spacing.xs }}>
-                    Avoids Medicare Levy Surcharge if income &gt; $97k
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Superannuation Strategy - Collapsible */}
-        <div style={{
-          backgroundColor: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          marginBottom: spacing.md,
-          overflow: 'hidden'
-        }}>
-          <div 
-            onClick={() => setShowSuperSection(!showSuperSection)}
-            style={{ 
-              padding: `14px ${spacing.xl}`,
-              cursor: 'pointer',
-              backgroundColor: showSuperSection ? '#f9fafb' : '#ffffff',
-              borderBottom: showSuperSection ? '1px solid #e5e7eb' : 'none',
-              transition: 'background-color 0.2s ease'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                <span style={{ fontSize: '16px', color: '#6b7280' }}>
-                  {showSuperSection ? '−' : '+'}
-                </span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                  Superannuation Strategy
-                </span>
-                {/* Status indicators */}
-                {!showSuperSection && (
-                  <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600', marginLeft: spacing.sm }}>
-                    Total: ${calculations.annualSuperContribution.toLocaleString()}/yr
-                    {calculations.annualSuperContribution > 30000 && 
-                      <span style={{ color: '#dc2626' }}> (over cap!)</span>
-                    }
-                  </span>
-                )}
-                {showSuperSection && additionalSuperContributions > 0 && <span style={{ color: '#059669', fontSize: '12px' }}>• ${additionalSuperContributions.toLocaleString()}/yr</span>}
-                {showSuperSection && hasInsuranceInSuper && <span style={{ color: '#dc2626', fontSize: '12px' }}>• Insurance active</span>}
-              </div>
-            </div>
-          </div>
-          {showSuperSection && (
-            <div style={{ padding: spacing.xl }}>
-              {/* Summary bar at top */}
-              <div style={{
-                backgroundColor: '#f3f4f6',
-                padding: '12px',
-                borderRadius: '6px',
-                marginBottom: '16px',
-                fontSize: '13px'
-              }}>
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                  gap: '8px'
-                }}>
-                  <div>
-                    <span style={{ color: '#6b7280' }}>Employer:</span>
-                    <strong> ${Math.round(calculations.annualSuperContribution - additionalSuperContributions).toLocaleString()}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: '#6b7280' }}>Your extra:</span>
-                    <strong> ${additionalSuperContributions.toLocaleString()}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: '#6b7280' }}>Annual limit:</span>
-                    <strong> $30,000</strong>
-                  </div>
-                </div>
-                
-                {/* TOTAL ROW */}
-                <div style={{ 
-                  marginTop: '8px', 
-                  paddingTop: '8px', 
-                  borderTop: '1px solid #d1d5db',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontWeight: '600'
-                }}>
-                  <span>Total Super Contributions:</span>
-                  <span style={{ 
-                    fontSize: '15px',
-                    color: calculations.annualSuperContribution > 30000 ? '#dc2626' : '#059669' 
-                  }}>
-                    ${calculations.annualSuperContribution.toLocaleString()}/year
-                    {calculations.annualSuperContribution > 30000 && ' ⚠️ OVER CAP'}
-                  </span>
-                </div>
-                
-                {/* Show remaining cap if not over */}
-                {calculations.annualSuperContribution <= 30000 && (30000 - calculations.annualSuperContribution) > 0 && (
-                  <div style={{ 
-                    fontSize: '12px', 
-                    color: '#6b7280', 
-                    marginTop: '4px',
-                    textAlign: 'right' 
-                  }}>
-                    (${(30000 - calculations.annualSuperContribution).toLocaleString()} remaining under cap)
-                  </div>
-                )}
-
-                {/* Visual cap usage indicator */}
-                <div style={{ marginTop: '12px' }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    fontSize: '12px', 
-                    marginBottom: '4px' 
-                  }}>
-                    <span>Cap usage</span>
-                    <span>{((calculations.annualSuperContribution / 30000) * 100).toFixed(0)}%</span>
-                  </div>
-                  <div style={{ 
-                    height: '8px', 
-                    backgroundColor: '#e5e7eb', 
-                    borderRadius: '4px',
-                    overflow: 'hidden' 
-                  }}>
-                    <div style={{ 
-                      height: '100%',
-                      width: `${Math.min(100, (calculations.annualSuperContribution / 30000) * 100)}%`,
-                      backgroundColor: calculations.annualSuperContribution > 30000 ? '#dc2626' : 
-                                      calculations.annualSuperContribution > 25000 ? '#f59e0b' : '#10b981',
-                      transition: 'width 0.3s ease'
-                    }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Salary Sacrifice Controls */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ ...labelStyle, fontSize: '13px' }}>
-                  Additional Super Contributions: ${additionalSuperContributions.toLocaleString()}/year
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="30000"
-                  step="1000"
-                  value={additionalSuperContributions}
-                  onChange={(e) => setAdditionalSuperContributions(parseInt(e.target.value))}
-                  style={sliderStyle}
-                />
-              </div>
-
-              {/* TAX BENEFIT ALERT - Show when salary sacrificing */}
-              {additionalSuperContributions > 0 && (() => {
-                const marginalTaxRate = annualIncome > 180000 ? 0.47 : 
-                                       annualIncome > 120000 ? 0.39 : 
-                                       annualIncome > 45000 ? 0.345 : 0.19;
-                const salSacTaxBenefit = additionalSuperContributions * (marginalTaxRate - 0.15);
-                const salSacNetCost = additionalSuperContributions - salSacTaxBenefit;
-                const futureValue = additionalSuperContributions * Math.pow(1 + calculations.netReturn, Math.max(0, 60 - currentAge));
-
-                return (
-                  <div style={{
-                    backgroundColor: '#f0fdf4',
-                    border: '1px solid #86efac',
-                    borderRadius: '6px',
-                    padding: '12px',
-                    marginBottom: '16px',
-                    fontSize: '13px'
-                  }}>
-                    <div style={{ fontWeight: '600', color: '#15803d', marginBottom: '4px' }}>
-                      💰 Tax Savings Active
-                    </div>
-                    <div>Tax saved: <strong>${Math.round(salSacTaxBenefit).toLocaleString()}/year</strong></div>
-                    <div>Net cost to you: <strong>${Math.round(salSacNetCost).toLocaleString()}/year</strong></div>
-                    <div>Extra at age 60: <strong>${Math.round(futureValue).toLocaleString()}</strong></div>
-                  </div>
-                );
-              })()}
-
-              {/* OPPORTUNITY ALERT - Show when NOT salary sacrificing but should be */}
-              {additionalSuperContributions === 0 && annualIncome > 120000 && (
-                <div style={{
-                  backgroundColor: '#fef3c7',
-                  border: '1px solid #fbbf24',
-                  borderRadius: '6px',
-                  padding: '12px',
-                  marginBottom: '16px',
-                  fontSize: '13px'
-                }}>
-                  <div style={{ fontWeight: '600', color: '#92400e', marginBottom: '4px' }}>
-                    💡 Tax Optimization Opportunity
-                  </div>
-                  <div>You're in the {annualIncome > 180000 ? '47' : '39'}% tax bracket.</div>
-                  <div>Salary sacrifice could save you significant tax!</div>
-                </div>
-              )}
-
-              {/* BRIDGE WARNING - Show when sacrificing but retiring early */}
-              {additionalSuperContributions > 10000 && retirementAge < 55 && (
-                <div style={{
-                  backgroundColor: '#fef2f2',
-                  border: '1px solid #fca5a5',
-                  borderRadius: '6px',
-                  padding: '12px',
-                  marginBottom: '16px',
-                  fontSize: '13px'
-                }}>
-                  <div style={{ fontWeight: '600', color: '#dc2626', marginBottom: '4px' }}>
-                    ⚠️ Early Retirement Bridge Risk
-                  </div>
-                  <div>High salary sacrifice reduces funds available before age 60.</div>
-                  <div>You need substantial funds outside super for years {retirementAge}-60.</div>
-                  <div>Consider balancing tax savings with accessibility.</div>
-                </div>
-              )}
-
-              {/* Insurance Section */}
-              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-                <label style={{ ...labelStyle, fontSize: '13px', display: 'flex', alignItems: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={hasInsuranceInSuper}
-                    onChange={(e) => setHasInsuranceInSuper(e.target.checked)}
-                    style={{ marginRight: '8px' }}
-                  />
-                  Insurance through Super
-                </label>
-                
-                {hasInsuranceInSuper && (
-                  <>
-                    <div style={{ marginTop: '12px' }}>
-                      <div style={{ 
-                        display: 'grid', 
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
-                        gap: '8px'
-                      }}>
-                        <div>
-                          <label style={{ ...labelStyle, fontSize: '12px' }}>Life ${insurancePremiums.life}/yr</label>
-                          <input
-                            type="number"
-                            value={insurancePremiums.life}
-                            onChange={(e) => setInsurancePremiums({...insurancePremiums, life: parseFloat(e.target.value) || 0})}
-                            style={{ ...inputStyle, fontSize: '12px', padding: '4px 8px' }}
-                            placeholder="800"
-                          />
-                        </div>
-                        <div>
-                          <label style={{ ...labelStyle, fontSize: '12px' }}>TPD ${insurancePremiums.tpd}/yr</label>
-                          <input
-                            type="number"
-                            value={insurancePremiums.tpd}
-                            onChange={(e) => setInsurancePremiums({...insurancePremiums, tpd: parseFloat(e.target.value) || 0})}
-                            style={{ ...inputStyle, fontSize: '12px', padding: '4px 8px' }}
-                            placeholder="300"
-                          />
-                        </div>
-                        <div>
-                          <label style={{ ...labelStyle, fontSize: '12px' }}>Income ${insurancePremiums.income}/yr</label>
-                          <input
-                            type="number"
-                            value={insurancePremiums.income}
-                            onChange={(e) => setInsurancePremiums({...insurancePremiums, income: parseFloat(e.target.value) || 0})}
-                            style={{ ...inputStyle, fontSize: '12px', padding: '4px 8px' }}
-                            placeholder="1200"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* INSURANCE IMPACT WARNING */}
-                    {(() => {
-                      const totalInsurancePremiums = insurancePremiums.life + insurancePremiums.tpd + insurancePremiums.income;
-                      const lostGrowth = totalInsurancePremiums * (Math.pow(1 + calculations.netReturn, 30) - 1) / calculations.netReturn;
-
-                      return totalInsurancePremiums > 2000 && (
-                        <div style={{
-                          backgroundColor: '#fef3c7',
-                          border: '1px solid #fbbf24',
-                          borderRadius: '6px',
-                          padding: '12px',
-                          marginTop: '12px',
-                          fontSize: '13px'
-                        }}>
-                          <div style={{ fontWeight: '600', color: '#92400e', marginBottom: '4px' }}>
-                            💸 Insurance Impact Alert
-                          </div>
-                          <div>30-year cost: <strong>${(totalInsurancePremiums * 30).toLocaleString()}</strong></div>
-                          <div>Lost compound growth: <strong>${Math.round(lostGrowth).toLocaleString()}</strong></div>
-                          <div style={{ marginTop: '4px', fontStyle: 'italic' }}>
-                            Consider external insurance to preserve super growth
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
-
-              {/* OPTIMIZATION RECOMMENDATION BOX */}
-              {(annualIncome > 120000 || (insurancePremiums.life + insurancePremiums.tpd + insurancePremiums.income) > 2000) && (
-                <div style={{
-                  backgroundColor: '#eff6ff',
-                  border: '1px solid #60a5fa',
-                  borderRadius: '6px',
-                  padding: '12px',
-                  marginTop: '16px',
-                  fontSize: '13px'
-                }}>
-                  <div style={{ fontWeight: '600', color: '#1d4ed8', marginBottom: '8px' }}>
-                    🎯 Optimal Strategy for You
-                  </div>
-                  
-                  {/* Personalized recommendation based on situation */}
-                  {retirementAge < 55 ? (
-                    <div>
-                      <strong>Early retirement focus:</strong> Consider moderate salary sacrifice 
-                      (${Math.min(10000, 30000 - Math.round(calculations.annualSuperContribution - additionalSuperContributions)).toLocaleString()}/yr) to balance tax savings 
-                      with bridge period needs.
-                    </div>
-                  ) : (
-                    <div>
-                      <strong>Tax optimization focus:</strong> Maximize salary sacrifice 
-                      up to the annual limit for maximum tax efficiency.
-                    </div>
-                  )}
-                  
-                  {(insurancePremiums.life + insurancePremiums.tpd + insurancePremiums.income) > 0 && (
-                    <div style={{ marginTop: '8px' }}>
-                      <strong>Insurance:</strong> ${(insurancePremiums.life + insurancePremiums.tpd + insurancePremiums.income).toLocaleString()}/yr 
-                      premiums will significantly impact super growth over time. Review if coverage is essential.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+      {/* Save/Load Controls */}
+      <div style={{ textAlign: 'center', marginBottom: '20px', padding: '16px', border: '1px solid #d1d5db', borderRadius: '8px', backgroundColor: '#f9fafb' }}>
+        <h4 style={{ marginBottom: '12px', color: '#374151', fontSize: '14px' }}>💾 Save & Share</h4>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
+          <button style={{ ...buttonStyle, backgroundColor: '#10b981' }} onClick={saveToLocalStorage}>
+            💾 Save Settings
+          </button>
+          <button style={{ ...buttonStyle, backgroundColor: '#3b82f6' }} onClick={loadFromLocalStorage}>
+            📂 Load Settings
+          </button>
+          <button style={{ ...buttonStyle, backgroundColor: '#8b5cf6' }} onClick={generateShareLink}>
+            🔗 Copy Share Link
+          </button>
+          <button style={{ ...buttonStyle, backgroundColor: '#f59e0b' }} onClick={resetToDefaults}>
+            🔄 Reset to Defaults
+          </button>
         </div>
       </div>
 
-      {/* Results Box - PayCalculator Style (prominent placement) */}
-      {/* Results section will be moved here for better UX */}
-
       {/* Assumptions Panel */}
-      <div style={{ 
-        ...sectionStyle, 
-        border: '2px solid #8b5cf6', 
-        backgroundColor: showAssumptions ? '#faf5ff' : '#f9fafb',
-        transition: 'all 0.3s ease'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          marginBottom: showAssumptions ? '20px' : '0',
-          cursor: 'pointer'
-        }} onClick={() => setShowAssumptions(!showAssumptions)}>
-          <div>
-            <h3 style={{ color: '#6b46c1', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {showAssumptions ? '▼' : '▶'} Market Assumptions & Returns
-              <span style={{ 
-                backgroundColor: '#8b5cf6', 
-                color: 'white', 
-                fontSize: '10px', 
-                padding: '2px 6px', 
-                borderRadius: '4px', 
-                fontWeight: '500' 
-              }}>
-                Advanced
-              </span>
-            </h3>
-            <div style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic', marginTop: '4px' }}>
-              Adjust market returns, withdrawal rates, and inflation assumptions
-            </div>
-          </div>
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h3 style={{ color: '#374151', margin: 0 }}>📊 Assumptions</h3>
+          <button 
+            style={{ ...buttonStyle, backgroundColor: '#6b7280' }}
+            onClick={() => setShowAssumptions(!showAssumptions)}
+          >
+            {showAssumptions ? '▲ Collapse' : '▼ Expand'}
+          </button>
         </div>
         
         {showAssumptions && (
@@ -1375,7 +764,7 @@ const AustralianFireCalculator = () => {
                 <label style={labelStyle}>
                   Expected Return: {expectedReturn}%
                   <span style={{ fontSize: '12px', fontWeight: '400', color: '#6b7280' }}>
-                    {' '}(Historical: ASX ~10%, Global ~8%, Balanced portfolio ~8.5%)
+                    {' '}(ASX200 ~10%, Global ~8%, Balanced ~8.5%)
                   </span>
                 </label>
                 <input
@@ -1392,7 +781,7 @@ const AustralianFireCalculator = () => {
                 <label style={labelStyle}>
                   Investment Fees: {investmentFees}%
                   <span style={{ fontSize: '12px', fontWeight: '400', color: '#6b7280' }}>
-                    {' '}(ETFs 0.2-0.3%, Industry Super 0.6-0.8%, Retail Super 1-2%)
+                    {' '}(ETFs ~0.2%, Industry Super ~0.8%, Retail ~1.5%)
                   </span>
                 </label>
                 <input
@@ -1417,7 +806,7 @@ const AustralianFireCalculator = () => {
               <label style={labelStyle}>
                 Safe Withdrawal Rate: {safeWithdrawalRate}%
                 <span style={{ fontSize: '12px', fontWeight: '400', color: '#6b7280' }}>
-                  {' '}(US studies suggest 4%, Australian FIRE community uses 3.5% for our market)
+                  {' '}(Trinity Study suggests 4%, Aussie consensus is 3.5% for safety)
                 </span>
               </label>
               <input
@@ -1474,14 +863,124 @@ const AustralianFireCalculator = () => {
               </div>
             </div>
 
+            {/* Tax Complexity */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={inputGroupStyle}>
+                <label style={labelStyle}>HECS/HELP Debt</label>
+                <input
+                  type="number"
+                  value={hecsDebt}
+                  onChange={(e) => setHecsDebt(parseFloat(e.target.value) || 0)}
+                  style={inputStyle}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label style={{ ...labelStyle, display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={hasPrivateHealth}
+                    onChange={(e) => setHasPrivateHealth(e.target.checked)}
+                    style={{ marginRight: '8px' }}
+                  />
+                  Private Health Insurance
+                  <span style={{ fontSize: '12px', fontWeight: '400', color: '#6b7280', marginLeft: '8px' }}>
+                    (avoids Medicare Levy Surcharge)
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div style={{ ...detailStyle, textAlign: 'center', marginTop: '16px' }}>
+              Effective Tax Rate: <span style={{ fontWeight: '600', color: '#dc2626' }}>
+                {calculations.effectiveTaxRate.toFixed(1)}%
+              </span>
+            </div>
           </>
         )}
       </div>
 
+      {/* Basic Inputs */}
+      <div style={sectionStyle}>
+        <h3 style={{ color: '#374151', marginBottom: '16px' }}>👤 Your Situation</h3>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div style={inputGroupStyle}>
+            <label style={labelStyle}>Current Age: {currentAge}</label>
+            <input
+              type="range"
+              min="20"
+              max="60"
+              value={currentAge}
+              onChange={(e) => setCurrentAge(parseInt(e.target.value))}
+              style={sliderStyle}
+            />
+          </div>
 
-      {/* Advanced Super Strategy Section - REMOVED: Now integrated into Your Situation */}
+          <div style={inputGroupStyle}>
+            <label style={labelStyle}>Retirement Target Age: {retirementAge}</label>
+            <input
+              type="range"
+              min="30"
+              max="70"
+              value={retirementAge}
+              onChange={(e) => setRetirementAge(parseInt(e.target.value))}
+              style={sliderStyle}
+            />
+          </div>
+
+          <div style={inputGroupStyle}>
+            <label style={labelStyle}>Current Savings (outside super)</label>
+            <input
+              type="number"
+              value={currentSavings}
+              onChange={(e) => setCurrentSavings(parseFloat(e.target.value) || 0)}
+              style={inputStyle}
+              placeholder="50000"
+            />
+          </div>
+
+          <div style={inputGroupStyle}>
+            <label style={labelStyle}>Annual Pre-tax Income</label>
+            <input
+              type="number"
+              value={annualIncome}
+              onChange={(e) => setAnnualIncome(parseFloat(e.target.value) || 0)}
+              style={inputStyle}
+              placeholder="100000"
+            />
+          </div>
+
+          <div style={inputGroupStyle}>
+            <label style={labelStyle}>Annual Expenses</label>
+            <input
+              type="number"
+              value={annualExpenses}
+              onChange={(e) => setAnnualExpenses(parseFloat(e.target.value) || 0)}
+              style={inputStyle}
+              placeholder="40000"
+            />
+          </div>
+
+          <div style={inputGroupStyle}>
+            <label style={labelStyle}>Current Super Balance</label>
+            <input
+              type="number"
+              value={currentSuper}
+              onChange={(e) => setCurrentSuper(parseFloat(e.target.value) || 0)}
+              style={inputStyle}
+              placeholder="100000"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Advanced Super Strategy Section */}
       <div style={{ 
-        display: 'none'
+        ...sectionStyle, 
+        border: '2px solid #8b5cf6', 
+        backgroundColor: showAdvancedSuper ? '#faf5ff' : '#f9fafb',
+        transition: 'all 0.3s ease'
       }}>
         <div style={{ 
           display: 'flex', 
@@ -1944,141 +1443,153 @@ const AustralianFireCalculator = () => {
           <div style={errorStyle}>
             ⚠️ Please enter your annual expenses to calculate retirement
           </div>
+        ) : calculations.isAlreadyRetired ? (
+          <div>
+            <div style={successStyle}>
+              🎯 You're already at/past your target retirement age!
+            </div>
+            <div style={detailStyle}>
+              <strong>Current wealth:</strong> {formatCurrency(calculations.totalWealth)}
+            </div>
+            <div style={detailStyle}>
+              <strong>Need for retirement:</strong> {formatCurrency(calculations.fireNumber)} (expenses × {fireMultiplier.toFixed(1)})
+            </div>
+            {calculations.canRetire ? (
+              <div style={{ ...detailStyle, color: '#059669', fontWeight: '600' }}>
+                ✅ You have enough to retire now!
+              </div>
+            ) : (
+              <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600' }}>
+                ❌ You need {formatCurrency(calculations.shortfall)} more to retire
+              </div>
+            )}
+          </div>
         ) : calculations.canRetire ? (
           <div>
-            {/* Main Message - Big and Clear */}
-            <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-              <div style={{ fontSize: '32px', fontWeight: '700', color: '#059669', marginBottom: '8px' }}>
-                ✅ You can retire at {retirementAge}!
-              </div>
+            <div style={successStyle}>
+              ✅ You can retire at {retirementAge}!
             </div>
             
-            {/* Key Metrics - Clean Grid */}
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: '1fr 1fr 1fr',
-              gap: '32px',
-              padding: '24px',
-              backgroundColor: '#f9fafb',
-              borderRadius: '12px',
-              marginBottom: '24px'
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '32px', fontWeight: '700', color: '#059669' }}>
-                  {formatCurrency(calculations.totalWealth)}
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-                  Wealth at retirement
-                </div>
-              </div>
-              
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '32px', fontWeight: '700', color: '#6366f1' }}>
-                  {calculations.savingsRate.toFixed(0)}%
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-                  Savings rate
-                </div>
-              </div>
-              
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '32px', fontWeight: '700', color: '#8b5cf6' }}>
-                  {retirementAge - currentAge} years
-                </div>
-                <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-                  Years to freedom
-                </div>
-              </div>
-            </div>
-
-            {/* Bridge Alert - Only if retiring before 60 */}
-            {calculations.bridgePeriodDetails.needsBridge && retirementAge < 60 && (
+            {/* Show bridge period success info if applicable */}
+            {calculations.bridgePeriodDetails.needsBridge && calculations.bridgePeriodFeasible && (
               <div style={{ 
-                padding: '16px', 
-                backgroundColor: calculations.bridgePeriodFeasible ? '#f0fdf4' : '#fef2f2',
-                borderLeft: `4px solid ${calculations.bridgePeriodFeasible ? '#10b981' : '#ef4444'}`,
-                borderRadius: '4px',
-                marginBottom: '16px'
+                marginTop: '12px', 
+                padding: '12px', 
+                backgroundColor: '#f0fdf4', 
+                borderRadius: '8px', 
+                border: '1px solid #86efac' 
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '20px' }}>
-                    {calculations.bridgePeriodFeasible ? '✅' : '⚠️'}
-                  </span>
-                  <div>
-                    <div style={{ fontWeight: '600', marginBottom: '4px' }}>
-                      Bridge to Age 60: {calculations.bridgePeriodFeasible ? 'Covered' : 'Short'}
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                      Need ${(calculations.bridgePeriodDetails.fundsNeeded/1000).toFixed(0)}k outside super for {calculations.bridgePeriodDetails.bridgeYears} years
-                      {calculations.bridgePeriodFeasible 
-                        ? ` (have ${(calculations.bridgePeriodDetails.fundsAvailable/1000).toFixed(0)}k)`
-                        : ` (only have ${(calculations.bridgePeriodDetails.fundsAvailable/1000).toFixed(0)}k)`
-                      }
-                    </div>
-                  </div>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#15803d', marginBottom: '8px' }}>
+                  ✅ Bridge to preservation age 60 is feasible
+                </div>
+                <div style={{ ...detailStyle, color: '#166534', marginBottom: '4px', fontSize: '14px' }}>
+                  <strong>Bridge period:</strong> {calculations.bridgePeriodDetails.bridgeYears} years (age {retirementAge} to 60)
+                </div>
+                <div style={{ ...detailStyle, color: '#166534', marginBottom: '4px', fontSize: '14px' }}>
+                  <strong>Funds needed:</strong> {formatCurrency(calculations.bridgePeriodDetails.fundsNeeded)}
+                </div>
+                <div style={{ ...detailStyle, color: '#166534', fontSize: '14px' }}>
+                  <strong>Available outside super:</strong> {formatCurrency(calculations.bridgePeriodDetails.fundsAvailable)}
                 </div>
               </div>
             )}
-            
-            {/* Assumptions - Very Subtle */}
-            <div style={{ 
-              fontSize: '11px', 
-              color: '#9ca3af', 
-              textAlign: 'center',
-              marginTop: '16px'
-            }}>
-              {(calculations.netReturn * 100).toFixed(1)}% returns • {safeWithdrawalRate}% withdrawal
-              {adjustForInflation && ` • ${inflationRate}% inflation`}
-            </div>
           </div>
         ) : (
-          // FAILURE STATE - Also simplified
           <div>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: '#dc2626', marginBottom: '12px' }}>
-                ❌ Cannot retire at {retirementAge}
-              </div>
-              <div style={{ fontSize: '20px', color: '#374151' }}>
-                Need <span style={{ fontWeight: '700', color: '#dc2626' }}>
-                  {formatCurrency(calculations.shortfall)}
-                </span> more
-              </div>
+            <div style={errorStyle}>
+              ❌ Cannot retire at {retirementAge}
             </div>
             
-            {/* Quick reason why */}
+            {/* Basic retirement shortfall */}
+            {!calculations.basicRetirementFeasible && (
+              <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600', marginBottom: '8px' }}>
+                Need {formatCurrency(calculations.shortfall - calculations.bridgePeriodShortfall)} more for basic retirement
+              </div>
+            )}
+            
+            {/* Bridge period shortfall */}
             {calculations.bridgePeriodDetails.needsBridge && !calculations.bridgePeriodFeasible && (
               <div style={{ 
-                textAlign: 'center',
-                padding: '12px',
-                backgroundColor: '#fef2f2',
-                borderRadius: '8px',
-                fontSize: '14px',
-                color: '#7f1d1d'
+                marginTop: '12px', 
+                padding: '12px', 
+                backgroundColor: '#fef2f2', 
+                borderRadius: '8px', 
+                border: '1px solid #fca5a5' 
               }}>
-                Main issue: Not enough funds outside super to bridge to age 60
+                <div style={{ fontSize: '16px', fontWeight: '600', color: '#dc2626', marginBottom: '8px' }}>
+                  ⚠️ Insufficient funds outside super to bridge to preservation age 60
+                </div>
+                <div style={{ ...detailStyle, color: '#7f1d1d', marginBottom: '4px' }}>
+                  <strong>Bridge period:</strong> {calculations.bridgePeriodDetails.bridgeYears} years (age {retirementAge} to 60)
+                </div>
+                <div style={{ ...detailStyle, color: '#7f1d1d', marginBottom: '4px' }}>
+                  <strong>Funds needed for bridge:</strong> {formatCurrency(calculations.bridgePeriodDetails.fundsNeeded)}
+                </div>
+                <div style={{ ...detailStyle, color: '#7f1d1d', marginBottom: '4px' }}>
+                  <strong>Funds available outside super:</strong> {formatCurrency(calculations.bridgePeriodDetails.fundsAvailable)}
+                </div>
+                <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600' }}>
+                  <strong>Need {formatCurrency(calculations.bridgePeriodShortfall)} more in accessible investments</strong>
+                </div>
+              </div>
+            )}
+
+            {/* Show total shortfall */}
+            <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600', marginTop: '8px' }}>
+              <strong>Total additional funds needed: {formatCurrency(calculations.shortfall)}</strong>
+            </div>
+          </div>
+        )}
+
+        {annualExpenses > 0 && !calculations.isAlreadyRetired && (
+          <>
+            <div style={detailStyle}>
+              <strong>Projected wealth at retirement:</strong> {formatCurrency(calculations.totalWealth)}
+            </div>
+            <div style={{ ...detailStyle, fontSize: '14px', fontStyle: 'italic', marginTop: '8px' }}>
+              Based on {(calculations.netReturn * 100).toFixed(1)}% net returns, {safeWithdrawalRate}% withdrawal rate
+              {adjustForInflation && `, ${inflationRate}% inflation`}
+              {showInTodaysDollars && ' (in today\'s purchasing power)'}
+            </div>
+          </>
+        )}
+
+        {calculations.annualSavings < 0 ? (
+          <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600', marginTop: '12px' }}>
+            ⚠️ Negative savings rate! Your expenses exceed income by {formatCurrency(Math.abs(calculations.annualSavings))}
+          </div>
+        ) : annualExpenses > 0 && (
+          <div style={detailStyle}>
+            <strong>Savings rate:</strong>
+            <span style={{ color: savingsRateColor, fontWeight: '600' }}>
+              {' '}{calculations.savingsRate.toFixed(1)}%
+            </span>
+          </div>
+        )}
+
+        {dieWithZeroMode && annualExpenses > 0 && (
+          <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+            <div style={{ fontSize: '16px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>
+              💰 Withdrawal Strategies Comparison
+            </div>
+            <div style={{ ...detailStyle, marginBottom: '4px' }}>
+              <strong>Safe perpetual withdrawal ({safeWithdrawalRate}%):</strong> {formatCurrency(calculations.withdrawalAmount)}/year
+            </div>
+            <div style={{ ...detailStyle, marginBottom: '8px' }}>
+              <strong>Spend to zero by age {lifeExpectancy}:</strong> {formatCurrency(calculations.spendToZeroAmount)}/year
+            </div>
+            {calculations.spendingBonus > 0 && (
+              <div style={{ ...detailStyle, color: '#059669', fontWeight: '600' }}>
+                🎉 <strong>Spend to Zero bonus:</strong> Extra {formatCurrency(calculations.spendingBonus)} per year to actually enjoy!
+                <br />
+                <span style={{ fontSize: '14px' }}>
+                  That's {Math.round(calculations.spendingBonus / 5000)} extra holidays, or {Math.round(calculations.spendingBonus / 100)} bottles of wine per year! 🍷
+                </span>
               </div>
             )}
           </div>
         )}
       </div>
-
-      {/* Die with Zero section - separate when enabled */}
-      {dieWithZeroMode && calculations.spendingBonus > 0 && (
-        <div style={{ 
-          padding: '16px',
-          backgroundColor: '#fef3c7',
-          borderRadius: '8px',
-          marginTop: '16px',
-          textAlign: 'center'
-        }}>
-          <div style={{ fontSize: '16px', fontWeight: '600', color: '#92400e' }}>
-            💰 Die with Zero Bonus: +{formatCurrency(calculations.spendingBonus)}/year
-          </div>
-          <div style={{ fontSize: '13px', color: '#78716c', marginTop: '4px' }}>
-            That's {Math.round(calculations.spendingBonus / 5000)} extra holidays per year!
-          </div>
-        </div>
-      )}
 
       {/* Chart */}
       <div style={chartStyle}>
@@ -2166,70 +1677,6 @@ const AustralianFireCalculator = () => {
             )}
           </LineChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* Save/Load Controls - Subtle Bottom Section */}
-      <div style={{ 
-        textAlign: 'center', 
-        marginTop: '40px', 
-        paddingTop: '20px', 
-        borderTop: '1px solid #e5e7eb', 
-        color: '#6b7280',
-        fontSize: '12px'
-      }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', marginBottom: '8px' }}>
-          <button 
-            style={{ 
-              ...buttonStyle, 
-              backgroundColor: '#6b7280', 
-              fontSize: '11px', 
-              padding: '4px 12px',
-              opacity: 0.8
-            }} 
-            onClick={saveToLocalStorage}
-          >
-            💾 Save
-          </button>
-          <button 
-            style={{ 
-              ...buttonStyle, 
-              backgroundColor: '#6b7280', 
-              fontSize: '11px', 
-              padding: '4px 12px',
-              opacity: 0.8
-            }} 
-            onClick={loadFromLocalStorage}
-          >
-            📂 Load
-          </button>
-          <button 
-            style={{ 
-              ...buttonStyle, 
-              backgroundColor: '#6b7280', 
-              fontSize: '11px', 
-              padding: '4px 12px',
-              opacity: 0.8
-            }} 
-            onClick={generateShareLink}
-          >
-            🔗 Share
-          </button>
-          <button 
-            style={{ 
-              ...buttonStyle, 
-              backgroundColor: '#6b7280', 
-              fontSize: '11px', 
-              padding: '4px 12px',
-              opacity: 0.8
-            }} 
-            onClick={resetToDefaults}
-          >
-            🔄 Reset
-          </button>
-        </div>
-        <div style={{ fontSize: '10px', color: '#9ca3af' }}>
-          Save settings locally or generate shareable links
-        </div>
       </div>
     </div>
   );
