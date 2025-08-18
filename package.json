@@ -5,7 +5,7 @@
   "description": "A comprehensive React-based calculator for Australians pursuing Financial Independence, Retire Early (FIRE) with accurate tax calculations and superannuation modeling",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jtor/aussie-fire.git"
+    "url": "https://github.com/jto014/aussie-fire.git"
   },
   "keywords": [
     "fire",

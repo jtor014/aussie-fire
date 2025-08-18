@@ -18,7 +18,7 @@ A comprehensive React-based calculator for Australians pursuing Financial Indepe
 
 1. Clone the repository
 ```bash
-git clone https://github.com/jtor/aussie-fire.git
+git clone https://github.com/jto014/aussie-fire.git
 cd aussie-fire
 ```
 
