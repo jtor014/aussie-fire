@@ -5,6 +5,19 @@ All notable changes to the Australian FIRE Calculator project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-08-18
+
+### Added
+- Edge case handling for users already at/past retirement age
+- Special retirement status message when current age >= retirement age
+- Current wealth assessment using 4% withdrawal rule
+- Improved user experience for immediate retirement scenarios
+
+### Fixed
+- Calculation logic now handles current age >= retirement age properly
+- Results section displays appropriate messages for current vs projected wealth
+- Chart data calculations work correctly for edge cases
+
 ## [0.1.0] - 2025-08-18
 
 ### Added

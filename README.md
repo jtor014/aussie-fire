@@ -10,6 +10,7 @@ A comprehensive React-based calculator for Australians pursuing Financial Indepe
 - **Superannuation Modeling**: Includes 11.5% employer super contributions and separate growth tracking
 - **Wealth Projection**: Interactive chart showing wealth growth from current age to 90
 - **4% Rule Validation**: Checks if your projected wealth supports your retirement expenses
+- **Edge Case Handling**: Special handling for users already at/past retirement age
 - **Real-time Updates**: All calculations update instantly as you adjust parameters
 - **Visual Analytics**: Three-line chart showing Outside Super, Super Balance, and Total Wealth
 - **Retirement Markers**: Visual indicators for retirement age and FIRE number targets
