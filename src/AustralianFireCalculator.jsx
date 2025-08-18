@@ -23,6 +23,7 @@
 
     const calculations = useMemo(() => {
       const yearsToRetirement = retirementAge - currentAge;
+      const isAlreadyRetired = yearsToRetirement <= 0;
       const tax = calculateTax(annualIncome);
       const afterTaxIncome = annualIncome - tax;
       const annualSavings = afterTaxIncome - annualExpenses;
@@ -412,25 +413,35 @@
         </div>
 
         <div style={resultStyle}>
-          {calculations.isAlreadyRetired ? (
+          {/* Edge Case 1: No expenses entered */}
+          {annualExpenses <= 0 ? (
+            <div style={errorStyle}>
+              ⚠️ Please enter your annual expenses to calculate retirement
+            </div>
+          ) : /* Edge Case 2: Current age >= retirement age */ 
+          calculations.isAlreadyRetired ? (
             <div>
               <div style={successStyle}>
-                🎯 You're already at/past your retirement age!
+                🎯 You're already at/past your target retirement age!
               </div>
               <div style={detailStyle}>
-                <strong>Check if your current wealth supports retirement:</strong>
+                <strong>Current wealth:</strong> {formatCurrency(calculations.totalWealth)}
+              </div>
+              <div style={detailStyle}>
+                <strong>Need for retirement:</strong> {formatCurrency(annualExpenses * 25)} (expenses × 25)
               </div>
               {calculations.canRetire ? (
                 <div style={{ ...detailStyle, color: '#059669', fontWeight: '600' }}>
-                  ✅ Your current wealth can support retirement with 4% withdrawal rule
+                  ✅ You have enough to retire now!
                 </div>
               ) : (
                 <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600' }}>
-                  ❌ You need {formatCurrency(calculations.shortfall)} more to support current expenses
+                  ❌ You need {formatCurrency(calculations.shortfall)} more to retire
                 </div>
               )}
             </div>
-          ) : calculations.canRetire ? (
+          ) : /* Normal retirement projection */
+          calculations.canRetire ? (
             <div style={successStyle}>
               ✅ You can retire at {retirementAge}!
             </div>
@@ -440,19 +451,28 @@
             </div>
           )}
 
-          <div style={detailStyle}>
-            <strong>{calculations.isAlreadyRetired ? 'Current wealth:' : 'Projected wealth at retirement:'}</strong>
-            {' '}{formatCurrency(calculations.totalWealth)}
-          </div>
+          {/* Only show wealth projection if expenses > 0 */}
+          {annualExpenses > 0 && !calculations.isAlreadyRetired && (
+            <div style={detailStyle}>
+              <strong>Projected wealth at retirement:</strong> {formatCurrency(calculations.totalWealth)}
+            </div>
+          )}
 
-          <div style={detailStyle}>
-            <strong>Savings rate:</strong>
-            <span style={{ color: savingsRateColor, fontWeight: '600' }}>
-              {' '}{calculations.savingsRate.toFixed(1)}%
-            </span>
-          </div>
+          {/* Edge Case 3: Expenses > Income (Negative savings rate) */}
+          {calculations.annualSavings < 0 ? (
+            <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600', marginTop: '12px' }}>
+              ⚠️ Negative savings rate! Your expenses exceed income by {formatCurrency(Math.abs(calculations.annualSavings))}
+            </div>
+          ) : annualExpenses > 0 && (
+            <div style={detailStyle}>
+              <strong>Savings rate:</strong>
+              <span style={{ color: savingsRateColor, fontWeight: '600' }}>
+                {' '}{calculations.savingsRate.toFixed(1)}%
+              </span>
+            </div>
+          )}
 
-          {dieWithZeroMode && (
+          {dieWithZeroMode && annualExpenses > 0 && (
             <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #f59e0b' }}>
               <div style={{ fontSize: '16px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>
                 💰 Withdrawal Strategies Comparison
