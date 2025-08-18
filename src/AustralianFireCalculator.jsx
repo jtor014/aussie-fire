@@ -31,27 +31,30 @@
 
       // Calculate future values with 7% annual return
       const returnRate = 0.07;
+      
+      let totalWealth;
+      
+      // Handle edge case: already at or past retirement age
+      if (yearsToRetirement <= 0) {
+        // Use current wealth only (no future projections)
+        totalWealth = currentSavings + currentSuper;
+      } else {
+        // Future value of current savings
+        const futureSavings = currentSavings * Math.pow(1 + returnRate, yearsToRetirement);
 
-      // Future value of current savings
-      const futureSavings = currentSavings * Math.pow(1 + returnRate,
-  yearsToRetirement);
+        // Future value of annual savings (annuity)
+        const futureAnnualSavings = annualSavings > 0
+          ? annualSavings * (Math.pow(1 + returnRate, yearsToRetirement) - 1) / returnRate
+          : 0;
 
-      // Future value of annual savings (annuity)
-      const futureAnnualSavings = annualSavings > 0
-        ? annualSavings * (Math.pow(1 + returnRate, yearsToRetirement) - 1)
-   / returnRate
-        : 0;
+        // Future value of current super
+        const futureCurrentSuper = currentSuper * Math.pow(1 + returnRate, yearsToRetirement);
 
-      // Future value of current super
-      const futureCurrentSuper = currentSuper * Math.pow(1 + returnRate,
-  yearsToRetirement);
+        // Future value of super contributions (annuity)
+        const futureSuperContributions = annualSuperContribution * (Math.pow(1 + returnRate, yearsToRetirement) - 1) / returnRate;
 
-      // Future value of super contributions (annuity)
-      const futureSuperContributions = annualSuperContribution *
-  (Math.pow(1 + returnRate, yearsToRetirement) - 1) / returnRate;
-
-      const totalWealth = futureSavings + futureAnnualSavings +
-  futureCurrentSuper + futureSuperContributions;
+        totalWealth = futureSavings + futureAnnualSavings + futureCurrentSuper + futureSuperContributions;
+      }
 
       // 4% rule check
       const withdrawalAmount = totalWealth * 0.04;
@@ -69,7 +72,8 @@
         returnRate,
         tax,
         afterTaxIncome,
-        annualSuperContribution
+        annualSuperContribution,
+        isAlreadyRetired: yearsToRetirement <= 0
       };
     }, [currentAge, retirementAge, currentSavings, annualIncome,
   annualExpenses, currentSuper]);
@@ -315,7 +319,25 @@
         </div>
 
         <div style={resultStyle}>
-          {calculations.canRetire ? (
+          {calculations.isAlreadyRetired ? (
+            <div>
+              <div style={successStyle}>
+                🎯 You're already at/past your retirement age!
+              </div>
+              <div style={detailStyle}>
+                <strong>Check if your current wealth supports retirement:</strong>
+              </div>
+              {calculations.canRetire ? (
+                <div style={{ ...detailStyle, color: '#059669', fontWeight: '600' }}>
+                  ✅ Your current wealth can support retirement with 4% withdrawal rule
+                </div>
+              ) : (
+                <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600' }}>
+                  ❌ You need {formatCurrency(calculations.shortfall)} more to support current expenses
+                </div>
+              )}
+            </div>
+          ) : calculations.canRetire ? (
             <div style={successStyle}>
               ✅ You can retire at {retirementAge}!
             </div>
@@ -326,8 +348,8 @@
           )}
 
           <div style={detailStyle}>
-            <strong>Projected wealth at retirement:</strong>
-  {formatCurrency(calculations.totalWealth)}
+            <strong>{calculations.isAlreadyRetired ? 'Current wealth:' : 'Projected wealth at retirement:'}</strong>
+            {' '}{formatCurrency(calculations.totalWealth)}
           </div>
 
           <div style={detailStyle}>
