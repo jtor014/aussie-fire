@@ -9,6 +9,8 @@
     const [annualIncome, setAnnualIncome] = useState(100000);
     const [annualExpenses, setAnnualExpenses] = useState(40000);
     const [currentSuper, setCurrentSuper] = useState(100000);
+    const [dieWithZeroMode, setDieWithZeroMode] = useState(false);
+    const [lifeExpectancy, setLifeExpectancy] = useState(90);
 
     // Australian tax brackets 2024-25
     const calculateTax = (income) => {
@@ -56,16 +58,47 @@
         totalWealth = futureSavings + futureAnnualSavings + futureCurrentSuper + futureSuperContributions;
       }
 
-      // 4% rule check
+      // 4% rule check (conservative approach)
       const withdrawalAmount = totalWealth * 0.04;
-      const canRetire = withdrawalAmount >= annualExpenses;
-      const shortfall = canRetire ? 0 : (annualExpenses - withdrawalAmount)
-   / 0.04;
+      
+      // Die with zero calculation (spend-to-zero approach)
+      let spendToZeroAmount = 0;
+      if (dieWithZeroMode && !isAlreadyRetired) {
+        const retirementYears = lifeExpectancy - retirementAge;
+        if (retirementYears > 0) {
+          // Calculate annual payment to deplete wealth by life expectancy
+          // Using present value of annuity formula: PMT = PV * (r * (1+r)^n) / ((1+r)^n - 1)
+          const r = returnRate;
+          const n = retirementYears;
+          if (r > 0) {
+            spendToZeroAmount = totalWealth * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+          } else {
+            spendToZeroAmount = totalWealth / n; // No growth case
+          }
+        }
+      } else if (dieWithZeroMode && isAlreadyRetired) {
+        const yearsLeft = lifeExpectancy - currentAge;
+        if (yearsLeft > 0) {
+          const r = returnRate;
+          const n = yearsLeft;
+          if (r > 0) {
+            spendToZeroAmount = totalWealth * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
+          } else {
+            spendToZeroAmount = totalWealth / n;
+          }
+        }
+      }
+      
+      const effectiveWithdrawal = dieWithZeroMode ? spendToZeroAmount : withdrawalAmount;
+      const canRetire = effectiveWithdrawal >= annualExpenses;
+      const shortfall = canRetire ? 0 : (annualExpenses - effectiveWithdrawal) / 0.04;
 
       return {
         savingsRate,
         totalWealth,
         withdrawalAmount,
+        spendToZeroAmount,
+        effectiveWithdrawal,
         canRetire,
         shortfall,
         annualSavings,
@@ -73,10 +106,11 @@
         tax,
         afterTaxIncome,
         annualSuperContribution,
-        isAlreadyRetired: yearsToRetirement <= 0
+        isAlreadyRetired: yearsToRetirement <= 0,
+        spendingBonus: Math.max(0, spendToZeroAmount - withdrawalAmount)
       };
     }, [currentAge, retirementAge, currentSavings, annualIncome,
-  annualExpenses, currentSuper]);
+  annualExpenses, currentSuper, dieWithZeroMode, lifeExpectancy]);
 
     const chartData = useMemo(() => {
       const data = [];
@@ -85,39 +119,63 @@
       const annualSavings = afterTaxIncome - annualExpenses;
       const fireNumber = annualExpenses * 25;
 
-      for (let age = currentAge; age <= 90; age++) {
+      for (let age = currentAge; age <= Math.max(90, lifeExpectancy + 5); age++) {
         const yearsFromNow = age - currentAge;
 
-        // Calculate outside super wealth (current savings + annual savings)
-        let outsideSuper = currentSavings * Math.pow(1 + returnRate,
-  yearsFromNow);
-        if (annualSavings > 0 && yearsFromNow > 0) {
-          outsideSuper += annualSavings * (Math.pow(1 + returnRate,
-  yearsFromNow) - 1) / returnRate;
+        // Calculate wealth accumulation phase (before retirement)
+        let outsideSuper = currentSavings * Math.pow(1 + returnRate, yearsFromNow);
+        let superBalance = currentSuper * Math.pow(1 + returnRate, yearsFromNow);
+        
+        if (annualSavings > 0 && yearsFromNow > 0 && age < retirementAge) {
+          outsideSuper += annualSavings * (Math.pow(1 + returnRate, yearsFromNow) - 1) / returnRate;
+        }
+        
+        if (yearsFromNow > 0 && age < retirementAge) {
+          superBalance += annualSuperContribution * (Math.pow(1 + returnRate, yearsFromNow) - 1) / returnRate;
         }
 
-        // Calculate super wealth (current super + contributions)
-        let superBalance = currentSuper * Math.pow(1 + returnRate,
-  yearsFromNow);
-        if (yearsFromNow > 0) {
-          superBalance += annualSuperContribution * (Math.pow(1 +
-  returnRate, yearsFromNow) - 1) / returnRate;
-        }
+        let totalWealth = outsideSuper + superBalance;
+        let spendToZeroWealth = totalWealth;
 
-        const totalWealth = outsideSuper + superBalance;
+        // Calculate spend-to-zero trajectory after retirement
+        if (dieWithZeroMode && age >= retirementAge) {
+          const yearsIntoRetirement = age - retirementAge;
+          const retirementYears = lifeExpectancy - retirementAge;
+          
+          if (retirementYears > 0 && yearsIntoRetirement >= 0) {
+            // Calculate remaining wealth using spend-to-zero withdrawal
+            const totalWealthAtRetirement = calculations.totalWealth;
+            const spendToZeroAmount = calculations.spendToZeroAmount;
+            
+            // Wealth depletes according to annuity payment schedule
+            const remainingYears = retirementYears - yearsIntoRetirement;
+            if (remainingYears > 0) {
+              const r = returnRate;
+              const n = remainingYears;
+              if (r > 0) {
+                spendToZeroWealth = spendToZeroAmount * (Math.pow(1 + r, n) - 1) / (r * Math.pow(1 + r, n));
+              } else {
+                spendToZeroWealth = spendToZeroAmount * remainingYears;
+              }
+            } else {
+              spendToZeroWealth = 0; // Depleted by life expectancy
+            }
+          }
+        }
 
         data.push({
           age,
           outsideSuper: Math.max(0, outsideSuper),
           superBalance: Math.max(0, superBalance),
           totalWealth: Math.max(0, totalWealth),
+          spendToZeroWealth: dieWithZeroMode ? Math.max(0, spendToZeroWealth) : totalWealth,
           fireNumber
         });
       }
 
       return data;
     }, [currentAge, currentSavings, currentSuper, annualExpenses,
-  calculations]);
+  calculations, dieWithZeroMode, lifeExpectancy, retirementAge]);
 
     const formatCurrency = (amount) => {
       return new Intl.NumberFormat('en-AU', {
@@ -311,11 +369,46 @@
           <input
             type="number"
             value={currentSuper}
-            onChange={(e) => setCurrentSuper(parseFloat(e.target.value) ||
-  0)}
+            onChange={(e) => setCurrentSuper(parseFloat(e.target.value) || 0)}
             style={inputStyle}
             placeholder="100000"
           />
+        </div>
+
+        <div style={{ ...inputGroupStyle, border: '2px solid #8b5cf6', borderRadius: '12px', padding: '20px', backgroundColor: '#f3f4f6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+            <label style={{ ...labelStyle, margin: 0, flex: 1 }}>
+              <span style={{ fontSize: '16px', fontWeight: '700' }}>Die with Zero mode 💀</span>
+              <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}>
+                Spend it all - you can't take it with you!
+              </div>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={dieWithZeroMode}
+                onChange={(e) => setDieWithZeroMode(e.target.checked)}
+                style={{ marginRight: '8px' }}
+              />
+              <span style={{ fontSize: '14px', fontWeight: '600' }}>Enable</span>
+            </label>
+          </div>
+          
+          {dieWithZeroMode && (
+            <div style={inputGroupStyle}>
+              <label style={labelStyle}>
+                Life expectancy: {lifeExpectancy}
+              </label>
+              <input
+                type="range"
+                min="75"
+                max="100"
+                value={lifeExpectancy}
+                onChange={(e) => setLifeExpectancy(parseInt(e.target.value))}
+                style={sliderStyle}
+              />
+            </div>
+          )}
         </div>
 
         <div style={resultStyle}>
@@ -359,9 +452,31 @@
             </span>
           </div>
 
+          {dieWithZeroMode && (
+            <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#fef3c7', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#92400e', marginBottom: '8px' }}>
+                💰 Withdrawal Strategies Comparison
+              </div>
+              <div style={{ ...detailStyle, marginBottom: '4px' }}>
+                <strong>Safe perpetual withdrawal (4%):</strong> {formatCurrency(calculations.withdrawalAmount)}/year
+              </div>
+              <div style={{ ...detailStyle, marginBottom: '8px' }}>
+                <strong>Spend to zero by age {lifeExpectancy}:</strong> {formatCurrency(calculations.spendToZeroAmount)}/year
+              </div>
+              {calculations.spendingBonus > 0 && (
+                <div style={{ ...detailStyle, color: '#059669', fontWeight: '600' }}>
+                  🎉 <strong>Spend to Zero bonus:</strong> Extra {formatCurrency(calculations.spendingBonus)} per year to actually enjoy!
+                  <br />
+                  <span style={{ fontSize: '14px' }}>
+                    That's {Math.round(calculations.spendingBonus / 5000)} extra holidays, or {Math.round(calculations.spendingBonus / 100)} bottles of wine per year! 🍷
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {calculations.annualSavings < 0 && (
-            <div style={{ ...detailStyle, color: '#dc2626', fontWeight: 
-  '600', marginTop: '12px' }}>
+            <div style={{ ...detailStyle, color: '#dc2626', fontWeight: '600', marginTop: '12px' }}>
               ⚠️ You're spending more than your after-tax income!
             </div>
           )}
@@ -409,6 +524,14 @@
                 strokeDasharray="3 3"
                 label={{ value: "FIRE Number", position: "topRight" }}
               />
+              {dieWithZeroMode && (
+                <ReferenceLine 
+                  x={lifeExpectancy} 
+                  stroke="#f59e0b" 
+                  strokeDasharray="8 4"
+                  label={{ value: `Life Expectancy: ${lifeExpectancy}`, position: "topLeft" }}
+                />
+              )}
 
               <Line 
                 type="monotone" 
@@ -431,9 +554,20 @@
                 dataKey="totalWealth" 
                 stroke="#10b981" 
                 strokeWidth={3}
-                name="Total Wealth"
+                name="Total Wealth (4% Rule)"
                 dot={false}
               />
+              {dieWithZeroMode && (
+                <Line 
+                  type="monotone" 
+                  dataKey="spendToZeroWealth" 
+                  stroke="#f59e0b" 
+                  strokeWidth={3}
+                  strokeDasharray="8 4"
+                  name="Spend to Zero Wealth"
+                  dot={false}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>
