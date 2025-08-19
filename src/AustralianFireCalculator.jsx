@@ -22,6 +22,7 @@ function residualSingle({ outAtR, supAtR, rOut, rSup, P }, R, L, W) {
   const stop1 = Math.min(P, L);
   while (age < stop1) {
     out = grow1y(out, rOut) - W;     // spending from OUTSIDE only
+    if (out < 0) return -Infinity;   // 🚧 bridge violated -> not feasible
     sup = grow1y(sup, rSup);         // super grows untouched
     age++;
   }
@@ -498,7 +499,7 @@ const AustralianFireCalculator = () => {
       setRetirementAge(parseInt(urlParams.get('retire')) || 50);
       setCurrentSavings(parseFloat(urlParams.get('savings')) || 50000);
       setAnnualIncome(parseFloat(urlParams.get('income')) || 100000);
-      setAnnualExpenses(parseFloat(urlParams.get('expenses')) || 40000);
+      setAnnualExpenses(parseFloat(urlParams.get('expenses')) || 65000);
       setCurrentSuper(parseFloat(urlParams.get('super')) || 100000);
       setDieWithZeroMode(urlParams.get('dzm') === '1');
       setLifeExpectancy(parseInt(urlParams.get('life')) || 90);
