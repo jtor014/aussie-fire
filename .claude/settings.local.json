@@ -17,7 +17,15 @@
       "Bash(chmod:*)",
       "Bash(./load-context.sh:*)",
       "Bash(./start-session.sh:*)",
-      "Bash(./quick-snapshot.sh:*)"
+      "Bash(./quick-snapshot.sh:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "Bash(npm test)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(sed:*)",
+      "Bash(node:*)",
+      "Bash(npm run lint)"
     ],
     "deny": [],
     "ask": []
