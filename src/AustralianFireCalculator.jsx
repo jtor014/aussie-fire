@@ -10,7 +10,8 @@ import { projectCouple } from './core/household';
 
 function PartnerSuperPanel({
   label, income, extra, onExtraChange,
-  hasInsurance, onHasInsurance, premiums, onPremiumsChange, rules
+  hasInsurance, onHasInsurance, premiums, onPremiumsChange, rules,
+  showLabel = true  // Show partner label (true for couples, false for single)
 }) {
   const cap = rules.concessional_cap ?? 30000;
   const { employer, additional, total } = calcSuperContribs(income, extra, 0, rules);
@@ -28,7 +29,9 @@ function PartnerSuperPanel({
 
   return (
     <div style={{ background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:8, padding:16 }}>
-      <div style={{ fontWeight:700, marginBottom:8 }}>🦘 {label} — Super Strategy</div>
+      <div style={{ fontWeight:700, marginBottom:8 }}>
+        🦘 {showLabel ? `${label} — Super Strategy` : 'Super Strategy'}
+      </div>
 
       <div style={{ fontSize:13, background:'#f3f4f6', padding:8, borderRadius:6, marginBottom:12 }}>
         <div>Employer: <strong>${employer.toLocaleString('en-AU')}</strong></div>
@@ -1043,81 +1046,19 @@ const AustralianFireCalculator = () => {
           {showSuperSection && (
             <div style={{ padding: spacing.xl }}>
               {planningAs === 'single' ? (
-                // Existing single-person super panel (moved from below)
-                <>
-                  {/* Summary bar at top */}
-                  <div style={{
-                    backgroundColor: '#f3f4f6',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    marginBottom: '16px',
-                    fontSize: '13px'
-                  }}>
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                      gap: '8px'
-                    }}>
-                      <div>
-                        <span style={{ color: '#6b7280' }}>Employer:</span>
-                        <strong> ${Math.round(calculations.annualSuperContribution - additionalSuperContributions).toLocaleString()}</strong>
-                      </div>
-                      <div>
-                        <span style={{ color: '#6b7280' }}>Your extra:</span>
-                        <strong> ${additionalSuperContributions.toLocaleString()}</strong>
-                      </div>
-                      <div>
-                        <span style={{ color: '#6b7280' }}>Annual limit:</span>
-                        <strong> $30,000</strong>
-                      </div>
-                    </div>
-                    
-                    {/* TOTAL ROW */}
-                    <div style={{ 
-                      marginTop: '8px', 
-                      paddingTop: '8px',
-                      borderTop: '1px solid #e5e7eb',
-                      fontSize: '14px',
-                      fontWeight: '600'
-                    }}>
-                      <span style={{ color: '#6b7280' }}>Total contribution: </span>
-                      <span style={{ color: calculations.isOverCap ? '#dc2626' : '#059669' }}>
-                        ${calculations.annualSuperContribution.toLocaleString()}/yr
-                        {calculations.isOverCap && <span style={{ marginLeft: '8px', fontSize: '12px' }}>🚨 Over cap by ${(calculations.annualSuperContribution - calculations.maxConcessionalCap).toLocaleString()}</span>}
-                        {!calculations.isOverCap && calculations.remainingCap > 0 && 
-                          <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
-                            (${calculations.remainingCap.toLocaleString()} remaining)
-                          </span>
-                        }
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* Slider */}
-                  <div style={{ marginBottom: spacing.lg }}>
-                    <label style={{ ...labelStyle, marginBottom: spacing.sm }}>
-                      Additional Super Contributions
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max={auRules.concessional_cap}
-                      step="1000"
-                      value={additionalSuperContributions}
-                      onChange={(e) => setAdditionalSuperContributions(parseInt(e.target.value) || 0)}
-                      style={sliderStyle}
-                    />
-                    <input
-                      type="number"
-                      min={0}
-                      max={auRules.concessional_cap}
-                      step={1000}
-                      value={additionalSuperContributions}
-                      onChange={(e) => setAdditionalSuperContributions(parseInt(e.target.value) || 0)}
-                      style={{ ...inputStyle, marginTop: 8 }}
-                    />
-                  </div>
-                </>
+                // Use same PartnerSuperPanel for consistency
+                <PartnerSuperPanel
+                  label="You"
+                  income={annualIncome}
+                  extra={additionalSuperContributions}
+                  onExtraChange={setAdditionalSuperContributions}
+                  hasInsurance={hasInsuranceInSuper}
+                  onHasInsurance={setHasInsuranceInSuper}
+                  premiums={insurancePremiums}
+                  onPremiumsChange={setInsurancePremiums}
+                  rules={auRules}
+                  showLabel={false}
+                />
               ) : (
                 // Couples dual super panels
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>

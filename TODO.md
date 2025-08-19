@@ -77,6 +77,8 @@
   - Per-partner super strategy panels with identical controls
   - Clean Tax & Deductions section (removed HECS/PHI duplicates)
   - Partner B defaults to reasonable starting values
+  - **FIXED**: Single mode now uses same PartnerSuperPanel (restored insurance in super controls)
+  - **IMPROVED**: Context-aware titles ("Super Strategy" vs "You — Super Strategy")
 - ✅ **Strangler-Fig Architecture** (Dec 2024)  
   - Complete separation of UI and business logic
   - Pure calculation functions with comprehensive test coverage
