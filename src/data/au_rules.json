@@ -1,0 +1,45 @@
+{
+  "tax_years": {
+    "2025_26": [
+      { "min": 0, "max": 18200, "rate": 0.0 },
+      { "min": 18201, "max": 45000, "rate": 0.19 },
+      { "min": 45001, "max": 120000, "rate": 0.325 },
+      { "min": 120001, "max": 180000, "rate": 0.37 },
+      { "min": 180001, "max": null, "rate": 0.45 }
+    ]
+  },
+  "medicare": { "rate": 0.02, "threshold": 29207 },
+  "mls": [{ "threshold": 97000, "surcharge": 0.01 }],
+  "concessional_cap": 30000,
+  "sg_max_base": 260280,
+  "preservation_age_table": [
+    { "born_before": "1960-07-01", "age": 55 },
+    { "born_before": "1961-07-01", "age": 56 },
+    { "born_before": "1962-07-01", "age": 57 },
+    { "born_before": "1963-07-01", "age": 58 },
+    { "born_before": "1964-07-01", "age": 59 },
+    { "born_before": "1965-07-01", "age": 60 }
+  ],
+  "transfer_balance_cap": 1800000,
+  "hecs_thresholds": [
+    { "min": 151200, "rate": 0.10 },
+    { "min": 142647, "rate": 0.095 },
+    { "min": 134568, "rate": 0.09 },
+    { "min": 126950, "rate": 0.085 },
+    { "min": 119764, "rate": 0.08 },
+    { "min": 112985, "rate": 0.075 },
+    { "min": 106590, "rate": 0.07 },
+    { "min": 100557, "rate": 0.065 },
+    { "min": 94865, "rate": 0.06 },
+    { "min": 89498, "rate": 0.055 },
+    { "min": 84432, "rate": 0.05 },
+    { "min": 79653, "rate": 0.045 },
+    { "min": 75140, "rate": 0.04 },
+    { "min": 70888, "rate": 0.035 },
+    { "min": 66875, "rate": 0.03 },
+    { "min": 63090, "rate": 0.025 },
+    { "min": 59519, "rate": 0.02 },
+    { "min": 51550, "rate": 0.01 },
+    { "min": 0, "rate": 0.0 }
+  ]
+}
