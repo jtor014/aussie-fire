@@ -279,10 +279,12 @@ const AustralianFireCalculator = () => {
   const DEFAULTS = {
     currentAge: 30,
     retireAge: 50,
-    income: 100000,
+    income: 120000,  // Updated to reflect Australian professional averages
     liquidStart: 50000,
     superStart: 100000,
-    longevity: 90
+    longevity: 90,
+    expensesSingle: 65000,  // ABS-based professional household average
+    expensesCouple: 95000   // ABS-based couple household average
   };
 
   // Basic inputs
@@ -290,7 +292,7 @@ const AustralianFireCalculator = () => {
   const [retirementAge, setRetirementAge] = useState(DEFAULTS.retireAge);
   const [currentSavings, setCurrentSavings] = useState(DEFAULTS.liquidStart);
   const [annualIncome, setAnnualIncome] = useState(DEFAULTS.income);
-  const [annualExpenses, setAnnualExpenses] = useState(40000);
+  const [annualExpenses, setAnnualExpenses] = useState(DEFAULTS.expensesSingle);
   const [currentSuper, setCurrentSuper] = useState(DEFAULTS.superStart);
   const [dieWithZeroMode, setDieWithZeroMode] = useState(false);
   const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULTS.longevity);
@@ -1240,9 +1242,21 @@ const AustralianFireCalculator = () => {
           <h3 style={{ color: '#374151', marginBottom: 20, fontSize: 18, fontWeight: 600 }}>👤 Your Situation</h3>
           <div style={{ fontSize: 13 }}>
             Planning as:&nbsp;
-            <label><input type="radio" checked={planningAs==='single'} onChange={()=>setPlanningAs('single')} /> Single</label>
+            <label><input type="radio" checked={planningAs==='single'} onChange={()=>{
+              setPlanningAs('single');
+              // Smart switch to single household expenses if currently at couple default
+              if (annualExpenses === DEFAULTS.expensesCouple) {
+                setAnnualExpenses(DEFAULTS.expensesSingle);
+              }
+            }} /> Single</label>
             &nbsp;&nbsp;
-            <label><input type="radio" checked={planningAs==='couple'} onChange={()=>setPlanningAs('couple')} /> Couple</label>
+            <label><input type="radio" checked={planningAs==='couple'} onChange={()=>{
+              setPlanningAs('couple');
+              // Smart switch to couple household expenses if currently at single default
+              if (annualExpenses === DEFAULTS.expensesSingle) {
+                setAnnualExpenses(DEFAULTS.expensesCouple);
+              }
+            }} /> Couple</label>
           </div>
         </div>
 
