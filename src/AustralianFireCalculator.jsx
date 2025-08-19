@@ -533,6 +533,128 @@ const AustralianFireCalculator = () => {
   }, [showAssumptions]);
 
 
+  // DWZ calculations (must come before calculations so it's available)
+  const dwzOutputs = useMemo(() => {
+    if (!dieWithZeroMode) return null;
+
+    const assumptions = {
+      nominalReturnOutside: expectedReturn / 100,
+      nominalReturnSuper: expectedReturn / 100,
+      inflation: inflationRate / 100
+    };
+
+    if (planningAs === 'couple') {
+      // COUPLES DWZ
+      const A = {
+        currentAge,
+        longevity: lifeExpectancy,
+        liquidStart: currentSavings,
+        superStart: currentSuper,
+        income: annualIncome,
+        extraSuper: additionalSuperContributions || 0
+      };
+      const B = {
+        currentAge: partnerB.currentAge,
+        longevity: partnerB.longevity || lifeExpectancy,
+        liquidStart: partnerB.liquidStart || 0,
+        superStart: partnerB.superStart || 0,
+        income: partnerB.income || 0,
+        extraSuper: partnerB.extraSuper || 0
+      };
+
+      const pA = dwzPersonFromState(A, assumptions, auRules);
+      const pB = dwzPersonFromState(B, assumptions, auRules);
+      const Lh = Math.max(pA.L, pB.L);
+      
+      // Get at-retirement balances for chart
+      const atRetirement = getCoupleAtRetirementBalances(pA, pB, retirementAge);
+      
+      const W = maxSpendDWZCouple(pA, pB, retirementAge, Lh);
+      
+      let earliest = null;
+      if (flags.dwzShowEarliestFire) {
+        earliest = earliestFireAgeDWZCouple(pA, pB, annualExpenses, Lh);
+      }
+
+      // Return structure that matches chart expectations
+      return { 
+        mode: 'couple', 
+        W, 
+        earliest, 
+        L: Lh, 
+        pA: atRetirement.pA, 
+        pB: atRetirement.pB, 
+        series: [] 
+      };
+    } else {
+      // SINGLE DWZ (existing logic)
+      // real returns
+      const rOut = (expectedReturn / 100) - (inflationRate / 100);
+      const rSup = rOut; // (use separate if you later support different super return)
+
+      // flows during work years (real $)
+      const tax = calcIncomeTax(annualIncome, { hasPrivateHealth, hecsDebt }, auRules);
+      const afterTaxIncome = Math.max(0, annualIncome - tax);
+      const realSavings = Math.max(0, afterTaxIncome - annualExpenses); // outside flow
+
+      const { employer, additional: yourExtra = 0 } =
+        calcSuperContribs(annualIncome, additionalSuperContributions || 0, 0, auRules);
+      const realSuperFlow = employer + yourExtra; // simple, in real dollars
+
+      // project balances from current age to a given retirement age (real)
+      const projectTo = (R) => {
+        let out = currentSavings;
+        let sup = currentSuper;
+        for (let a = currentAge; a < R; a++) {
+          out = grow1y(out, rOut) + realSavings;
+          sup = grow1y(sup, rSup) + realSuperFlow;
+        }
+        return { outAtR: out, supAtR: sup };
+      };
+
+      const P = getPreservationAge(currentAge, auRules);
+      const L = lifeExpectancy;
+
+      // balances at current retirement age
+      const { outAtR, supAtR } = projectTo(retirementAge);
+      const p = { outAtR, supAtR, rOut, rSup, P };
+      const W = solveWForSingle(p, retirementAge, L);
+
+      // earliest FIRE age (binary search)
+      let earliest = null;
+      if (flags.dwzShowEarliestFire) {
+        let lo = currentAge + 1;
+        let hi = Math.min(L - 1, 75);  // reasonable upper bound
+        while (lo <= hi) {
+          const mid = Math.floor((lo + hi) / 2);
+          const { outAtR: outM, supAtR: supM } = projectTo(mid);
+          const pM = { outAtR: outM, supAtR: supM, rOut, rSup, P };
+          const WM = solveWForSingle(pM, mid, L);
+          if (WM + EPS >= annualExpenses) {
+            earliest = mid;
+            hi = mid - 1; // search earlier
+          } else {
+            lo = mid + 1;
+          }
+        }
+      }
+
+      // series for the chart (so chart = panel truth)
+      const series = seriesSingle(p, retirementAge, L, W);
+
+      return { mode: 'single', W, earliest, L, p, series };
+    }
+    // eslint-disable-next-line
+  }, [
+    dieWithZeroMode, flags.dwzEnabled, planningAs,
+    // inputs:
+    currentAge, retirementAge, lifeExpectancy,
+    currentSavings, currentSuper,
+    annualIncome, annualExpenses, additionalSuperContributions,
+    hasPrivateHealth, hecsDebt, expectedReturn, inflationRate, auRules,
+    partnerB
+  ]);
+
   const calculations = useMemo(() => {
     const yearsToRetirement = retirementAge - currentAge;
     const isAlreadyRetired = yearsToRetirement <= 0;
@@ -637,7 +759,9 @@ const AustralianFireCalculator = () => {
     const bridgePeriodDetails = bridge;
 
     // Update retirement feasibility based on bridge period
-    const effectiveWithdrawal = dieWithZeroMode ? spendToZeroAmount : withdrawalAmount;
+    // Use DWZ W when DWZ mode is enabled and available, otherwise fall back to legacy spendToZeroAmount
+    const dwzSustainableSpend = (flags.dwzEnabled && dwzOutputs?.W) ? dwzOutputs.W : spendToZeroAmount;
+    const effectiveWithdrawal = dieWithZeroMode ? dwzSustainableSpend : withdrawalAmount;
     const basicRetirementFeasible = effectiveWithdrawal >= annualExpenses;
     const canRetire = basicRetirementFeasible && bridgePeriodFeasible;
     
@@ -649,7 +773,7 @@ const AustralianFireCalculator = () => {
       savingsRate,
       totalWealth,
       withdrawalAmount,
-      spendToZeroAmount,
+      spendToZeroAmount: dwzSustainableSpend,
       effectiveWithdrawal,
       canRetire,
       shortfall: totalShortfall,
@@ -684,7 +808,7 @@ const AustralianFireCalculator = () => {
   }, [currentAge, retirementAge, currentSavings, annualIncome, annualExpenses, currentSuper, 
       dieWithZeroMode, lifeExpectancy, expectedReturn, investmentFees, safeWithdrawalRate, 
       adjustForInflation, inflationRate, showInTodaysDollars, hecsDebt, hasPrivateHealth,
-      additionalSuperContributions, hasInsuranceInSuper, insurancePremiums]);
+      additionalSuperContributions, hasInsuranceInSuper, insurancePremiums, dwzOutputs, flags]);
 
   const coupleProjection = useMemo(() => {
     if (planningAs !== 'couple') return null;
@@ -727,73 +851,6 @@ const AustralianFireCalculator = () => {
   ]);
 
   // DWZ calculations (Phase 2) - new robust version
-  const dwzOutputs = useMemo(() => {
-    if (!dieWithZeroMode) return null;
-
-    // real returns
-    const rOut = (expectedReturn / 100) - (inflationRate / 100);
-    const rSup = rOut; // (use separate if you later support different super return)
-
-    // flows during work years (real $)
-    const tax = calcIncomeTax(annualIncome, { hasPrivateHealth, hecsDebt }, auRules);
-    const afterTaxIncome = Math.max(0, annualIncome - tax);
-    const realSavings = Math.max(0, afterTaxIncome - annualExpenses); // outside flow
-
-    const { employer, additional: yourExtra = 0 } =
-      calcSuperContribs(annualIncome, additionalSuperContributions || 0, 0, auRules);
-    const realSuperFlow = employer + yourExtra; // simple, in real dollars
-
-    // project balances from current age to a given retirement age (real)
-    const projectTo = (R) => {
-      let out = currentSavings;
-      let sup = currentSuper;
-      for (let a = currentAge; a < R; a++) {
-        out = grow1y(out, rOut) + realSavings;
-        sup = grow1y(sup, rSup) + realSuperFlow;
-      }
-      return { outAtR: out, supAtR: sup };
-    };
-
-    const P = getPreservationAge(currentAge, auRules);
-    const L = lifeExpectancy;
-
-    // balances at current retirement age
-    const { outAtR, supAtR } = projectTo(retirementAge);
-    const p = { outAtR, supAtR, rOut, rSup, P };
-    const W = solveWForSingle(p, retirementAge, L);
-
-    // earliest FIRE age (binary search)
-    let earliest = null;
-    if (flags.dwzShowEarliestFire) {
-      let lo = currentAge + 1;
-      let hi = Math.min(L - 1, 75);  // reasonable upper bound
-      while (lo <= hi) {
-        const mid = Math.floor((lo + hi) / 2);
-        const { outAtR: outM, supAtR: supM } = projectTo(mid);
-        const pM = { outAtR: outM, supAtR: supM, rOut, rSup, P };
-        const WM = solveWForSingle(pM, mid, L);
-        if (WM + EPS >= annualExpenses) {
-          earliest = mid;
-          hi = mid - 1; // search earlier
-        } else {
-          lo = mid + 1;
-        }
-      }
-    }
-
-    // series for the chart (so chart = panel truth)
-    const series = seriesSingle(p, retirementAge, L, W);
-
-    return { mode: 'single', W, earliest, L, p, series };
-    // eslint-disable-next-line
-  }, [
-    dieWithZeroMode, flags.dwzEnabled,
-    // inputs:
-    currentAge, retirementAge, lifeExpectancy,
-    currentSavings, currentSuper,
-    annualIncome, annualExpenses, additionalSuperContributions,
-    hasPrivateHealth, hecsDebt, expectedReturn, inflationRate, auRules
-  ]);
 
   // Derived FIRE ages (DWZ takes precedence when enabled)
   const dwzEarliestAge =
@@ -957,9 +1014,9 @@ const AustralianFireCalculator = () => {
 
   const chartDataCouple = useMemo(() => {
     // COUPLE: Switch to DWZ simulation when DWZ mode is enabled
-    if (dieWithZeroMode && flags.dwzEnabled && dwzOutputs?.W && dwzOutputs?.params?.pA && dwzOutputs?.params?.pB) {
+    if (dieWithZeroMode && flags.dwzEnabled && dwzOutputs?.W && dwzOutputs?.pA && dwzOutputs?.pB) {
       try {
-        const { pA, pB, Lh } = dwzOutputs.params;
+        const { pA, pB, L: Lh } = dwzOutputs;
         
         // Additional validation
         if (!pA || !pB || typeof pA.outAtR !== 'number' || typeof pB.outAtR !== 'number') {
@@ -2041,6 +2098,12 @@ const AustralianFireCalculator = () => {
                 <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
                   Real (today's) dollars. Outside money covers the bridge until super unlocks at preservation age. Life expectancy set to {lifeExpectancy}.
                 </div>
+                {flags.dwzShowEarliestFire && dwzOutputs && dwzOutputs.earliest == null && (
+                  <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
+                    At current assumptions, the plan spend isn't sustainable before life expectancy.
+                    Try lowering spend, increasing contributions, or adjusting returns.
+                  </div>
+                )}
               </div>
             )}
           </>

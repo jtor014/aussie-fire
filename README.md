@@ -36,6 +36,14 @@ A comprehensive React-based calculator for Australians pursuing Financial Indepe
 - **Real-time Confidence**: Shows assumptions basis for all calculations
 - **Advanced Super Strategy**: Collapsible section with salary sacrifice optimization and insurance analysis
 
+### Die-With-Zero (DWZ) Engine
+- **Robust Mathematical Solver**: Uses bisection algorithm to find maximum sustainable spend
+- **Bridge Period Validation**: Enforces outside-super-only constraint before preservation age (60)
+- **Couples Mode Support**: Handles two-partner scenarios with different preservation ages
+- **Earliest FIRE Age**: Binary search to find minimum retirement age for target spending
+- **Real Dollar Consistency**: All calculations in inflation-adjusted terms
+- **UI Integration**: All interface elements use consistent DWZ calculations
+
 ## How to Run Locally
 
 1. Clone the repository
@@ -93,12 +101,23 @@ npm run dev
 - **Die with Zero**: Annuity calculation to spend all wealth by life expectancy
 - **Super Access**: Preservation age rules (can't access before 60)
 
-## Future Enhancements
+## Known Issues & Development Status
+
+### DWZ Engine Status ⚠️
+- **Bridge constraint solver**: Currently returns ~$4,750/yr when mathematical limit should be ~$3,600/yr for early retirement scenarios (R=40, P=60). The bisection algorithm needs refinement to properly enforce outside-money-only constraint during bridge period.
+- **UI consistency**: ✅ Fixed - All interface elements now use the same DWZ calculation source
+- **Couples mode**: ✅ Working - Basic two-partner DWZ calculations implemented
+- **Test coverage**: ✅ 23/23 tests passing, including bridge constraint validation tests
+
+### Future Enhancements
 
 - [x] ~~Multiple investment return scenarios~~ ✅ (Preset scenarios implemented)
 - [x] ~~Inflation adjustment options~~ ✅ (Real vs nominal returns)
 - [x] ~~Different withdrawal rate strategies~~ ✅ (2.5-5% configurable)
 - [x] ~~Save/load scenarios~~ ✅ (localStorage + URL sharing)
+- [x] ~~Die-with-Zero engine~~ ✅ (Core implementation complete, minor solver refinement needed)
+- [ ] Refine bridge constraint enforcement in DWZ solver
+- [ ] Three-segment couples preservation age handling
 - [ ] Capital gains tax considerations
 - [ ] Franking credits modeling  
 - [ ] Part-time work transition planning
