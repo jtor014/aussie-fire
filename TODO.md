@@ -1,14 +1,20 @@
 # TODO List for Australian FIRE Calculator
 
-## Critical Priority (Most Users Need This)
-- [ ] **COUPLES MODE** - Most FIRE planners have partners/families
-  - Combined income/expenses
-  - Optimal tax splitting strategies
-  - Spousal super contributions
-  - Double Age Pension eligibility
-  - Synchronized retirement planning
-- [ ] Test all edge cases thoroughly
-- [ ] Fix any calculation bugs found
+## ✅ COMPLETED - Foundation Architecture
+- ✅ **STRANGLER-FIG REFACTOR** - Extracted logic from UI
+  - ✅ Created `/core`, `/data`, `/models` folders  
+  - ✅ Moved hard-coded rules to `au_rules.json`
+  - ✅ Extracted pure functions: `tax.js`, `super.js`, `bridge.js`, `household.js`
+  - ✅ Added comprehensive Vitest test suite (17 tests)
+  - ✅ UI identical, results match exactly
+- ✅ **COUPLES MODE** - Full partner support implemented
+  - ✅ Per-partner tax calculations using same pure functions
+  - ✅ Combined household cashflow and bridge logic  
+  - ✅ Single/Couple mode toggle with unified PersonSituationCard
+  - ✅ Per-partner super strategy panels with cap tracking
+  - ✅ Tax & Deductions section cleaned up (removed duplicates)
+
+## Next Development Priorities
 
 ## High Priority
 - [ ] **Enhanced Die with Zero**
@@ -65,9 +71,18 @@
 - [ ] Document all calculations
 - [ ] Create video walkthrough
 
-## Recent Improvements Made
-- ✅ PayCalculator-style UI restructure
-- ✅ Consistent spacing system with variables
-- ✅ Simplified and cleaned results section
-- ✅ Enhanced Basic Details and Current Wealth sections
-- ✅ Professional collapsible sections styling
+## Recent Major Updates
+- ✅ **Phase 3 Couples Mode Complete** (Dec 2024)
+  - Unified PersonSituationCard component for both partners
+  - Per-partner super strategy panels with identical controls
+  - Clean Tax & Deductions section (removed HECS/PHI duplicates)
+  - Partner B defaults to reasonable starting values
+- ✅ **Strangler-Fig Architecture** (Dec 2024)  
+  - Complete separation of UI and business logic
+  - Pure calculation functions with comprehensive test coverage
+  - Australian tax rules externalized to JSON configuration
+  - Zero regressions - all existing functionality preserved
+- ✅ **Foundation UI Improvements** (Nov 2024)
+  - PayCalculator-style professional layout
+  - Consistent spacing system and collapsible sections
+  - Enhanced Basic Details and Current Wealth sections
