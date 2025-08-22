@@ -1,11 +1,18 @@
 # TODO List for Australian FIRE Calculator
 
 ## ✅ COMPLETED - Foundation Architecture
+- ✅ **T-010: DWZ-ONLY MODE TRANSFORMATION** (Aug 2025) - 🚀 MAJOR UPDATE
+  - ✅ **Global Results Banner** - Real-time retirement status under page title
+  - ✅ **DWZ Always On** - Removed SWR toggle, DWZ settings permanently visible
+  - ✅ **Dynamic Chart Markers** - Conditional markers based on planning mode
+  - ✅ **SWR Cleanup** - Removed all Safe Withdrawal Rate references and calculations
+  - ✅ **Planning Mode Integration** - Earliest vs target age with appropriate feedback
+  - ✅ **Migration Compatibility** - Shims for existing dwzEnabled parameters
 - ✅ **STRANGLER-FIG REFACTOR** - Extracted logic from UI
   - ✅ Created `/core`, `/data`, `/models` folders  
   - ✅ Moved hard-coded rules to `au_rules.json`
   - ✅ Extracted pure functions: `tax.js`, `super.js`, `bridge.js`, `household.js`
-  - ✅ Added comprehensive Vitest test suite (17 tests)
+  - ✅ Added comprehensive Vitest test suite (23 tests)
   - ✅ UI identical, results match exactly
 - ✅ **COUPLES MODE** - Full partner support implemented
   - ✅ Per-partner tax calculations using same pure functions
@@ -72,6 +79,12 @@
 - [ ] Create video walkthrough
 
 ## Recent Major Updates
+- ✅ **T-010: DWZ-Only Mode Transformation** (Aug 2025) 🚀
+  - **BREAKING**: Removed Safe Withdrawal Rate toggle - Die-With-Zero is now primary planning approach
+  - **NEW**: GlobalBanner component displays real-time retirement status prominently
+  - **ENHANCED**: Dynamic chart markers based on planning mode (earliest FIRE vs target age)
+  - **IMPROVED**: DWZ settings always visible without toggle for streamlined UX
+  - **MIGRATION**: Backward compatibility shims for existing dwzEnabled parameters
 - ✅ **Phase 3 Couples Mode Complete** (Dec 2024)
   - Unified PersonSituationCard component for both partners
   - Per-partner super strategy panels with identical controls

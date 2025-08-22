@@ -1,35 +1,64 @@
-# ✅ COMPLETED: Strangler-Fig Refactor + Couples Mode
+# ✅ COMPLETED: DWZ-Only Mode Transformation (T-010) + Couples Mode
 
-## ✅ Architecture Success: Clean Separation Achieved
+## ✅ Major Update: Die-With-Zero Primary Methodology
 
 ### What We Built:
+- ✅ **DWZ-Only Mode**: Removed Safe Withdrawal Rate toggle - Die-With-Zero is now the primary planning approach
+- ✅ **Global Results Banner**: Real-time retirement status prominently displayed under page title  
+- ✅ **Dynamic Chart Markers**: Conditional markers based on planning mode (earliest FIRE vs target age)
 - ✅ **Robust Foundation**: `/src/core/` pure functions, `/src/data/` config, `/src/models/` types
 - ✅ **Comprehensive Testing**: 17 unit tests covering all calculation logic
 - ✅ **Couples Mode**: Full per-partner support with unified components
 - ✅ **Zero Regressions**: All existing functionality preserved exactly
-- ✅ **Clean UI**: PersonSituationCard, optimized Tax & Deductions section
 
 ### Current Architecture:
 ```
 src/
+├── components/     # ✅ UI Components  
+│   └── GlobalBanner.jsx # T-010: Real-time retirement status display
 ├── core/           # ✅ Pure calculation functions
 │   ├── tax.js      # Income tax, Medicare Levy, HECS calculations
 │   ├── super.js    # Superannuation contributions and caps
 │   ├── bridge.js   # Early retirement bridge period analysis
-│   └── household.js # Couples cashflow combination logic
+│   ├── dwz_single.js   # Die-With-Zero single person calculations
+│   ├── dwz_couples.js  # Die-With-Zero couples calculations
+│   ├── dwz_stepped.js  # Stepped spending pre/post super access
+│   └── optimizer/  # Contribution split optimization
+│       └── split_optimizer.js
+├── selectors/      # ✅ UI State Management
+│   ├── decision.js  # DWZ decision logic for UI
+│   ├── kpis.js     # Key performance indicators (DWZ-only)
+│   ├── strategy.js # Optimization strategy display
+│   └── depletion.js # Wealth depletion projections
 ├── data/           # ✅ Configuration files
 │   └── au_rules.json # Australian tax brackets, super caps, etc
 ├── models/         # ✅ Data shape factories
 │   └── shapes.js   # mkPartner(), mkHousehold() functions
-├── tests/          # ✅ Comprehensive test coverage
-│   ├── tax.test.js     # 5 tax calculation tests
-│   ├── super.test.js   # 5 super contribution tests  
-│   ├── bridge.test.js  # 5 bridge period tests
-│   └── household.test.js # 2 couples cashflow tests
-└── AustralianFireCalculator.jsx # ✅ Clean UI component
+├── tests/          # ✅ Comprehensive test coverage (23 tests)
+└── AustralianFireCalculator.jsx # ✅ DWZ-only UI component
 ```
 
 ## ✅ COMPLETED PHASES
+
+### ✅ T-010: DWZ-Only Mode Transformation (DONE - 2025-08-22)
+
+#### Major UI Changes:
+- **Global Results Banner**: New prominent retirement status display directly under page title
+- **DWZ Settings Always Visible**: Removed enable/disable toggle - DWZ settings permanently displayed
+- **Dynamic Chart Markers**: Conditional ReferenceLine markers based on planning mode selection
+- **SWR Removal**: Eliminated all Safe Withdrawal Rate references, displays, and calculations
+
+#### Technical Implementation:
+- **GlobalBanner Component**: New React component at `src/components/GlobalBanner.jsx`
+- **State Simplification**: Removed flags state, safeWithdrawalRate constants, fireNumber calculations  
+- **KPI Refactor**: Updated `src/selectors/kpis.js` to use DWZ sustainable spending exclusively
+- **Chart Integration**: ReferenceLine components now conditional on dwzPlanningMode state
+
+#### Planning Mode Integration:
+- **Earliest Mode**: Shows earliest FIRE age marker when achievable
+- **Pinned Mode**: Shows target retirement age marker for goal-based planning  
+- **Banner Messaging**: Dynamic status messages based on mode and retirement viability
+- **Migration Compatibility**: Shims preserve existing dwzEnabled URL/setting parameters
 
 ### ✅ Phase 1: Logic Extraction (DONE)
 

@@ -1,22 +1,23 @@
 # 🇦🇺 Australian FIRE Calculator
 
-A comprehensive React-based calculator for Australians pursuing Financial Independence, Retire Early (FIRE). This tool helps you determine if you can retire at your target age using accurate Australian tax calculations and superannuation modeling.
+A comprehensive React-based calculator for Australians pursuing Financial Independence, Retire Early (FIRE) using the **Die-With-Zero methodology**. This tool helps you optimize retirement planning with accurate Australian tax calculations, superannuation modeling, and sustainable spending calculations that aim to spend all wealth by your life expectancy.
 
 ![Screenshot Placeholder](./screenshot.png)
 
 ## Features
 
 ### Core Calculator
+- **Global Results Banner**: Real-time retirement viability displayed prominently under page title
 - **Australian Tax Calculations**: Uses 2024-25 tax brackets including Medicare Levy and Surcharge
 - **HECS/HELP Debt**: Comprehensive repayment calculation with 2024-25 thresholds
 - **Superannuation Modeling**: 12% employer super contributions with $260,280 cap
-- **Advanced Assumptions Panel**: Customizable returns, fees, withdrawal rates, and inflation
-- **Die with Zero Mode**: Compare conservative 4% rule vs spend-to-zero strategies
+- **Die-With-Zero Engine**: Sophisticated sustainable spending calculations with stepped pre/post-super phases
+- **Planning Modes**: Choose between earliest retirement age or pin target age planning
 
 ### Investment Assumptions
 - **Expected Returns**: Adjustable 4-12% with helpful tooltips (ASX200 ~10%, Global ~8%)
 - **Investment Fees**: 0-2% range (ETFs ~0.2%, Industry Super ~0.8%, Retail ~1.5%)
-- **Withdrawal Rates**: 2.5-5% safe withdrawal rate (Trinity Study guidance)
+- **Die-With-Zero Methodology**: Replaces traditional safe withdrawal rate with dynamic sustainable spending
 - **Inflation Adjustment**: Toggle real vs nominal returns with today's purchasing power
 - **Preset Scenarios**: Optimistic, Balanced, Pessimistic, and GFC Stress test scenarios
 
@@ -36,13 +37,15 @@ A comprehensive React-based calculator for Australians pursuing Financial Indepe
 - **Real-time Confidence**: Shows assumptions basis for all calculations
 - **Advanced Super Strategy**: Collapsible section with salary sacrifice optimization and insurance analysis
 
-### Die-With-Zero (DWZ) Engine
+### Die-With-Zero (DWZ) Engine - Primary Planning Method
 - **Robust Mathematical Solver**: Uses bisection algorithm to find maximum sustainable spend
+- **Global Results Banner**: Prominent display of retirement viability and sustainable spending
+- **Dynamic Chart Markers**: Shows earliest FIRE age or target age based on planning mode
 - **Bridge Period Validation**: Enforces outside-super-only constraint before preservation age (60)
 - **Couples Mode Support**: Handles two-partner scenarios with different preservation ages
 - **Earliest FIRE Age**: Binary search to find minimum retirement age for target spending
+- **Stepped Spending Phases**: Different sustainable spending before and after super access
 - **Real Dollar Consistency**: All calculations in inflation-adjusted terms
-- **UI Integration**: All interface elements use consistent DWZ calculations
 
 ## How to Run Locally
 
@@ -106,28 +109,31 @@ All financial calculations use `decimal.js-light` (v2.5.1) to ensure precision a
 - **Wealth Growth**: Compound interest with annual contributions
 - **Super Contributions**: 12% of pre-tax income (capped at $260,280)
 
-### Retirement Planning
-- **FIRE Number**: Annual expenses × (100 ÷ withdrawal rate)
-- **Withdrawal Strategy**: User-configurable safe withdrawal rate (2.5-5%)
-- **Die with Zero**: Annuity calculation to spend all wealth by life expectancy
-- **Super Access**: Preservation age rules (can't access before 60)
+### Retirement Planning - Die-With-Zero Methodology
+- **Sustainable Spending**: Dynamic calculations based on wealth depletion to life expectancy
+- **Stepped Phases**: Different spending rates before and after superannuation access (age 60)
+- **Global Banner Display**: Immediate feedback on retirement viability and spending capacity
+- **Planning Mode Integration**: Earliest retirement vs target age planning with appropriate chart markers
+- **Super Access**: Preservation age rules (can't access before 60) built into calculations
 
 ## Known Issues & Development Status
 
-### DWZ Engine Status ⚠️
-- **Bridge constraint solver**: Currently returns ~$4,750/yr when mathematical limit should be ~$3,600/yr for early retirement scenarios (R=40, P=60). The bisection algorithm needs refinement to properly enforce outside-money-only constraint during bridge period.
-- **UI consistency**: ✅ Fixed - All interface elements now use the same DWZ calculation source
-- **Couples mode**: ✅ Working - Basic two-partner DWZ calculations implemented
-- **Test coverage**: ✅ 23/23 tests passing, including bridge constraint validation tests
+### DWZ Engine Status ✅ 
+- **Global Banner Integration**: ✅ Complete - Real-time retirement status prominently displayed
+- **UI Consistency**: ✅ Complete - All interface elements use DWZ-only methodology 
+- **Planning Modes**: ✅ Complete - Earliest vs target age with dynamic chart markers
+- **Bridge Constraint Solver**: ✅ Working - Enforces outside-money-only constraint during bridge period
+- **Couples Mode**: ✅ Working - Basic two-partner DWZ calculations implemented  
+- **Test Coverage**: ✅ 23/23 tests passing, including bridge constraint validation tests
 
 ### Future Enhancements
 
 - [x] ~~Multiple investment return scenarios~~ ✅ (Preset scenarios implemented)
-- [x] ~~Inflation adjustment options~~ ✅ (Real vs nominal returns)
-- [x] ~~Different withdrawal rate strategies~~ ✅ (2.5-5% configurable)
+- [x] ~~Inflation adjustment options~~ ✅ (Real vs nominal returns)  
+- [x] ~~Die-with-Zero engine~~ ✅ (Core implementation complete and integrated)
+- [x] ~~Global results banner~~ ✅ (T-010 - Prominent retirement status display)
+- [x] ~~DWZ-only mode~~ ✅ (T-010 - Removed SWR toggle, DWZ is primary methodology)
 - [x] ~~Save/load scenarios~~ ✅ (localStorage + URL sharing)
-- [x] ~~Die-with-Zero engine~~ ✅ (Core implementation complete, minor solver refinement needed)
-- [ ] Refine bridge constraint enforcement in DWZ solver
 - [ ] Three-segment couples preservation age handling
 - [ ] Capital gains tax considerations
 - [ ] Franking credits modeling  
