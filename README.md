@@ -69,7 +69,18 @@ npm run dev
 - **React** - Frontend framework with hooks for state management
 - **Vite** - Fast build tool and development server
 - **Recharts** - Interactive charting library for wealth projections
+- **Decimal.js-light** - Precision decimal arithmetic for financial calculations
 - **Modern CSS** - Inline styles with gradient design elements
+
+## Money Maths
+
+All financial calculations use `decimal.js-light` (v2.5.1) to ensure precision and eliminate floating-point rounding errors common with JavaScript's native `Number` type.
+
+- **Rounding Mode**: ROUND_HALF_EVEN (banker's rounding) - ensures fairness over many transactions
+- **When to Round**: Only at presentation/display edges, never during intermediate calculations  
+- **Precision**: Full precision maintained during calculations, rounded to cents for display
+- **Performance**: Negligible impact (<1ms per calculation) for typical FIRE planning workloads
+- **Conversion**: `toNumber()` only used at UI boundaries; all core calculations remain in Decimal
 
 ## Input Parameters
 

@@ -27,7 +27,11 @@
       "Bash(node:*)",
       "Bash(npm run lint)",
       "Bash(git checkout:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm test:*)",
+      "Bash(find:*)",
+      "Bash(npm version:*)",
+      "Bash(git merge:*)"
     ],
     "deny": [],
     "ask": []

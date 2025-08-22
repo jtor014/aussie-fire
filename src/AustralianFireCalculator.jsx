@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { kpisFromState, extractDisplayKpis } from './selectors/kpis.js';
+import { decisionFromState, getDecisionDisplay, getComparisonStrip } from './selectors/decision.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import auRules from './data/au_rules.json';
 import { calcIncomeTax, getMarginalRate } from './core/tax';
@@ -657,160 +659,140 @@ const AustralianFireCalculator = () => {
     partnerB
   ]);
 
-  const calculations = useMemo(() => {
-    const yearsToRetirement = retirementAge - currentAge;
-    const isAlreadyRetired = yearsToRetirement <= 0;
-    const tax = calcIncomeTax(annualIncome, {
-      hasPrivateHealth,
-      hecsDebt
-    }, auRules);
-    const afterTaxIncome = annualIncome - tax;
-    const annualSavings = afterTaxIncome - annualExpenses;
-    const savingsRate = afterTaxIncome > 0 ? (annualSavings / afterTaxIncome) * 100 : 0;
-    const effectiveTaxRate = (tax / annualIncome) * 100;
-
-    // Super contributions using core function
-    const totalInsurancePremiums = hasInsuranceInSuper ? 
-      (insurancePremiums.life + insurancePremiums.tpd + insurancePremiums.income) : 0;
-    
-    const {
-      employer: employerSuperContribution,
-      total: totalAnnualSuperContribution,
-      net: netSuperContribution,
-      remainingCap,
-      isOverCap,
-      cap: concessionalCap
-    } = calcSuperContribs(
+  // Centralized KPI calculations with proper life expectancy reactivity
+  const kpis = useMemo(() => {
+    const state = {
+      currentAge,
+      retirementAge,
+      lifeExpectancy,
+      currentSavings,
+      currentSuper,
       annualIncome,
+      annualExpenses,
+      hecsDebt,
+      hasPrivateHealth,
       additionalSuperContributions,
-      totalInsurancePremiums,
-      auRules
-    );
+      hasInsuranceInSuper,
+      insurancePremiums,
+      expectedReturn,
+      investmentFees,
+      safeWithdrawalRate,
+      inflationRate,
+      adjustForInflation,
+      dieWithZeroMode,
+      planningAs,
+      partnerB
+    };
     
-    // Salary sacrifice tax benefits
+    return kpisFromState(state, auRules);
+  }, [
+    currentAge, retirementAge, lifeExpectancy,
+    currentSavings, currentSuper, annualIncome, annualExpenses,
+    hecsDebt, hasPrivateHealth, additionalSuperContributions,
+    hasInsuranceInSuper, insurancePremiums,
+    expectedReturn, investmentFees, safeWithdrawalRate,
+    inflationRate, adjustForInflation, dieWithZeroMode,
+    planningAs, partnerB
+  ]);
+
+  // Unified decision logic for all UI components
+  const decision = useMemo(() => {
+    const state = {
+      currentAge,
+      retirementAge,
+      lifeExpectancy,
+      currentSavings,
+      currentSuper,
+      annualIncome,
+      annualExpenses,
+      hecsDebt,
+      hasPrivateHealth,
+      additionalSuperContributions,
+      hasInsuranceInSuper,
+      insurancePremiums,
+      expectedReturn,
+      investmentFees,
+      safeWithdrawalRate,
+      inflationRate,
+      adjustForInflation,
+      dieWithZeroMode,
+      planningAs,
+      partnerB
+    };
+    
+    return decisionFromState(state, auRules);
+  }, [
+    currentAge, retirementAge, lifeExpectancy,
+    currentSavings, currentSuper, annualIncome, annualExpenses,
+    hecsDebt, hasPrivateHealth, additionalSuperContributions,
+    hasInsuranceInSuper, insurancePremiums,
+    expectedReturn, investmentFees, safeWithdrawalRate,
+    inflationRate, adjustForInflation, dieWithZeroMode,
+    planningAs, partnerB
+  ]);
+
+  // Display-ready decision data
+  const decisionDisplay = useMemo(() => getDecisionDisplay(decision), [decision]);
+  const comparisonStrip = useMemo(() => getComparisonStrip(decision), [decision]);
+
+  // Legacy compatibility - map KPIs to existing calculation structure
+  const calculations = useMemo(() => {
     const marginalTaxRate = getMarginalRate(annualIncome, auRules);
     const superTaxRate = 0.15;
     const salSacTaxBenefit = additionalSuperContributions * (marginalTaxRate - superTaxRate);
     const salSacNetCost = additionalSuperContributions - salSacTaxBenefit;
-
-    // Use dynamic return rate
-    const returnRate = showInTodaysDollars ? realReturn : netReturn;
+    const effectiveTaxRate = (kpis.tax / annualIncome) * 100;
     
-    let totalWealth;
+    // Use dynamic return rate for display
+    const returnRate = showInTodaysDollars ? kpis.realReturn : kpis.netReturn;
     
-    if (yearsToRetirement <= 0) {
-      totalWealth = currentSavings + currentSuper;
-    } else {
-      const futureSavings = currentSavings * Math.pow(1 + returnRate, yearsToRetirement);
-      const futureAnnualSavings = annualSavings > 0
-        ? annualSavings * (Math.pow(1 + returnRate, yearsToRetirement) - 1) / returnRate
-        : 0;
-      const futureCurrentSuper = currentSuper * Math.pow(1 + returnRate, yearsToRetirement);
-      const futureSuperContributions = netSuperContribution * (Math.pow(1 + returnRate, yearsToRetirement) - 1) / returnRate;
-
-      totalWealth = futureSavings + futureAnnualSavings + futureCurrentSuper + futureSuperContributions;
-    }
-
-    // Use dynamic withdrawal rate
-    const withdrawalAmount = totalWealth * (safeWithdrawalRate / 100);
-    
-    // Die with zero calculation
-    let spendToZeroAmount = 0;
-    if (dieWithZeroMode && !isAlreadyRetired) {
-      const retirementYears = lifeExpectancy - retirementAge;
-      if (retirementYears > 0) {
-        const r = returnRate;
-        const n = retirementYears;
-        if (r > 0) {
-          spendToZeroAmount = totalWealth * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-        } else {
-          spendToZeroAmount = totalWealth / n;
-        }
-      }
-    } else if (dieWithZeroMode && isAlreadyRetired) {
-      const yearsLeft = lifeExpectancy - currentAge;
-      if (yearsLeft > 0) {
-        const r = returnRate;
-        const n = yearsLeft;
-        if (r > 0) {
-          spendToZeroAmount = totalWealth * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
-        } else {
-          spendToZeroAmount = totalWealth / n;
-        }
-      }
-    }
-    
-    // PRESERVATION AGE BRIDGE PERIOD VALIDATION
-    const preservationAge =
-      /* keep static for now; when you capture DOB: getPreservationAge(dob, auRules) */ 60;
-
-    const bridge = assessBridge({
-      currentAge,
-      retirementAge,
-      preservationAge,
-      currentOutsideSuper: currentSavings,
-      annualOutsideSavings: annualSavings,
-      annualExpenseNeed: annualExpenses,
-      returnRate: returnRate,
-      dieWithZero: dieWithZeroMode,
-      spendToZeroAnnual: spendToZeroAmount
-    });
-
-    const bridgePeriodFeasible = bridge.feasible;
-    const bridgePeriodShortfall = bridge.shortfall;
-    const bridgePeriodDetails = bridge;
-
     // Update retirement feasibility based on bridge period
-    // Use DWZ W when DWZ mode is enabled and available, otherwise fall back to legacy spendToZeroAmount
-    const dwzSustainableSpend = (flags.dwzEnabled && dwzOutputs?.W) ? dwzOutputs.W : spendToZeroAmount;
-    const effectiveWithdrawal = dieWithZeroMode ? dwzSustainableSpend : withdrawalAmount;
+    // Use DWZ W when DWZ mode is enabled and available, otherwise use KPI sustainable spend
+    const dwzSustainableSpend = (flags.dwzEnabled && dwzOutputs?.W) ? dwzOutputs.W : kpis.sustainableSpend;
+    const effectiveWithdrawal = dieWithZeroMode ? dwzSustainableSpend : kpis.totalWealthAtRetirement * (safeWithdrawalRate / 100);
     const basicRetirementFeasible = effectiveWithdrawal >= annualExpenses;
-    const canRetire = basicRetirementFeasible && bridgePeriodFeasible;
+    const canRetire = basicRetirementFeasible && kpis.bridgeAssessment.feasible;
     
     // Calculate total shortfall (basic retirement + bridge period)
     const basicShortfall = basicRetirementFeasible ? 0 : (annualExpenses - effectiveWithdrawal) / (safeWithdrawalRate / 100);
-    const totalShortfall = basicShortfall + bridgePeriodShortfall;
+    const totalShortfall = basicShortfall + kpis.bridgeAssessment.shortfall;
 
     return {
-      savingsRate,
-      totalWealth,
-      withdrawalAmount,
+      savingsRate: kpis.savingsRate,
+      totalWealth: kpis.totalWealthAtRetirement,
+      withdrawalAmount: kpis.totalWealthAtRetirement * (safeWithdrawalRate / 100),
       spendToZeroAmount: dwzSustainableSpend,
       effectiveWithdrawal,
       canRetire,
       shortfall: totalShortfall,
-      annualSavings,
+      annualSavings: kpis.annualSavings,
       returnRate,
-      tax,
-      afterTaxIncome,
-      annualSuperContribution: totalAnnualSuperContribution,
-      isAlreadyRetired,
-      // Legacy spendingBonus calculation removed
+      tax: kpis.tax,
+      afterTaxIncome: kpis.afterTaxIncome,
+      annualSuperContribution: kpis.superContribs.total,
+      isAlreadyRetired: kpis.isAlreadyRetired,
       effectiveTaxRate,
-      netReturn,
-      realReturn,
-      fireNumber,
-      bridgePeriodFeasible,
-      bridgePeriodShortfall,
-      bridgePeriodDetails,
+      netReturn: kpis.netReturn,
+      realReturn: kpis.realReturn,
+      fireNumber: kpis.fireNumber,
+      bridgePeriodFeasible: kpis.bridgeAssessment.feasible,
+      bridgePeriodShortfall: kpis.bridgeAssessment.shortfall,
+      bridgePeriodDetails: kpis.bridgeAssessment,
       basicRetirementFeasible,
       // Advanced Super calculations
-      employerSuperContribution,
-      totalAnnualSuperContribution,
-      netSuperContribution,
+      employerSuperContribution: kpis.superContribs.employer,
+      totalAnnualSuperContribution: kpis.superContribs.total,
+      netSuperContribution: kpis.superContribs.net,
       salSacTaxBenefit,
       salSacNetCost,
-      totalInsurancePremiums,
+      totalInsurancePremiums: kpis.totalInsurancePremiums,
       marginalTaxRate,
-      // Optimization insights (now from core function)
-      maxConcessionalCap: concessionalCap,
-      remainingCap,
-      isOverCap
+      // Optimization insights
+      maxConcessionalCap: auRules.concessional_cap,
+      remainingCap: kpis.superContribs.remainingCap,
+      isOverCap: kpis.superContribs.isOverCap
     };
-  }, [currentAge, retirementAge, currentSavings, annualIncome, annualExpenses, currentSuper, 
-      dieWithZeroMode, lifeExpectancy, expectedReturn, investmentFees, safeWithdrawalRate, 
-      adjustForInflation, inflationRate, showInTodaysDollars, hecsDebt, hasPrivateHealth,
-      additionalSuperContributions, hasInsuranceInSuper, insurancePremiums, dwzOutputs, flags]);
+  }, [kpis, showInTodaysDollars, safeWithdrawalRate, flags.dwzEnabled, dwzOutputs?.W, annualIncome, annualExpenses, additionalSuperContributions]);
 
   const coupleProjection = useMemo(() => {
     if (planningAs !== 'couple') return null;
@@ -2062,7 +2044,10 @@ const AustralianFireCalculator = () => {
         {dieWithZeroMode && (
           <>
             <div style={inputGroupStyle}>
-              <label style={labelStyle}>Life expectancy: {lifeExpectancy}</label>
+              <label style={labelStyle}>Life expectancy (DWZ horizon): {lifeExpectancy}</label>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
+                Plans to roughly deplete by this age; earlier retirement is possible if you accept this horizon.
+              </div>
               <input
                 type="range"
                 min="75"
@@ -2074,13 +2059,13 @@ const AustralianFireCalculator = () => {
             </div>
 
             {/* DWZ Insights Panel (Phase 3) - New reactive version */}
-            {dieWithZeroMode && dwzOutputs && (
+            {decision.mode === 'DWZ' && (
               <div style={{marginTop:12, padding:12, border:'1px solid #e5e7eb', borderRadius:8}}>
                 <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', gap:12}}>
                   <div>
                     <div style={{fontSize:13, color:'#4b5563'}}>Sustainable spend (real)</div>
                     <div style={{fontSize:20, fontWeight:700}}>
-                      ${Math.round(dwzOutputs.W).toLocaleString()}/yr
+                      ${Math.round(kpis.sustainableSpend).toLocaleString()}/yr
                     </div>
                   </div>
                   <div>
@@ -2091,18 +2076,18 @@ const AustralianFireCalculator = () => {
                   </div>
                   <div>
                     <div style={{fontSize:13, color:'#4b5563'}}>Status vs plan</div>
-                    <div style={{fontSize:20, fontWeight:700, color: dwzOutputs.W >= annualExpenses ? '#059669' : '#dc2626'}}>
-                      {dwzOutputs.W >= annualExpenses ? 'OK' : 'Shortfall'}
+                    <div style={{fontSize:20, fontWeight:700, color: kpis.sustainableSpend >= annualExpenses ? '#059669' : '#dc2626'}}>
+                      {kpis.sustainableSpend >= annualExpenses ? 'OK' : 'Shortfall'}
                     </div>
                   </div>
-                  {dwzOutputs.earliest != null && (
+                  {kpis.earliestFireAge != null && (
                     <div>
                       <div style={{fontSize:13, color:'#4b5563'}}>Earliest FIRE age (same spend)</div>
                       <div style={{fontSize:20, fontWeight:700}}>
-                        {dwzOutputs.earliest}
-                        {dwzOutputs.earliest < retirementAge &&
+                        {kpis.earliestFireAge}
+                        {kpis.earliestFireAge < retirementAge &&
                           <span style={{marginLeft:8, fontSize:14, color:'#059669'}}>
-                            ({retirementAge - dwzOutputs.earliest} yrs earlier)
+                            ({retirementAge - kpis.earliestFireAge} yrs earlier)
                           </span>
                         }
                       </div>
@@ -2112,7 +2097,16 @@ const AustralianFireCalculator = () => {
                 <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
                   Real (today's) dollars. Outside money covers the bridge until super unlocks at preservation age. Life expectancy set to {lifeExpectancy}.
                 </div>
-                {flags.dwzShowEarliestFire && dwzOutputs && dwzOutputs.earliest == null && (
+                {/* Constraint explanation */}
+                {planningAs === 'single' && kpis.bindingConstraint && (
+                  <div style={{marginTop:6, fontSize:11, color:'#9ca3af', fontStyle:'italic'}}>
+                    {kpis.bindingConstraint === 'bridge' 
+                      ? `Bound by bridge to age ${auRules.preservation_age || 60} — longevity changes won't move Earliest until post-preservation becomes limiting.`
+                      : 'Bound by post-preservation horizon — longevity will affect Earliest.'
+                    }
+                  </div>
+                )}
+                {flags.dwzShowEarliestFire && decision.mode === 'DWZ' && decision.earliestFireAge == null && (
                   <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
                     At current assumptions, the plan spend isn't sustainable before life expectancy.
                     Try lowering spend, increasing contributions, or adjusting returns.
@@ -2121,6 +2115,33 @@ const AustralianFireCalculator = () => {
               </div>
             )}
           </>
+        )}
+        
+        {/* DWZ vs SWR Comparison Strip */}
+        {comparisonStrip && (
+          <div style={{
+            marginTop: 16,
+            padding: 12,
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: 8,
+            fontSize: 13
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 8, color: '#374151' }}>
+              Retirement Timing Comparison
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ color: '#6b7280' }}>
+                {comparisonStrip.swrText}
+              </div>
+              <div style={{ color: '#6b7280' }}>
+                {comparisonStrip.dwzText}
+              </div>
+              <div style={{ color: '#059669', fontWeight: 600, marginTop: 4 }}>
+                {comparisonStrip.benefitText}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
@@ -2184,12 +2205,12 @@ const AustralianFireCalculator = () => {
             <div style={errorStyle}>
               ⚠️ Please enter your annual expenses to calculate retirement
             </div>
-          ) : calculations.canRetire ? (
+          ) : decision.canRetireAtTarget ? (
           <div>
             {/* Main Message - Big and Clear */}
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
               <div style={{ fontSize: '32px', fontWeight: '700', color: '#059669', marginBottom: '8px' }}>
-                ✅ You can retire at {fireAgeForUi}!
+                {decisionDisplay.primaryMessage}
               </div>
             </div>
             
@@ -2276,13 +2297,13 @@ const AustralianFireCalculator = () => {
           <div>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '28px', fontWeight: '700', color: '#dc2626', marginBottom: '12px' }}>
-                ❌ Cannot retire at {retirementAge}
+                {decisionDisplay.primaryMessage}
               </div>
-              <div style={{ fontSize: '20px', color: '#374151' }}>
-                Need <span style={{ fontWeight: '700', color: '#dc2626' }}>
-                  {formatCurrency(calculations.shortfall)}
-                </span> more
-              </div>
+              {decisionDisplay.shortfallMessage && (
+                <div style={{ fontSize: '20px', color: '#374151' }}>
+                  {decisionDisplay.shortfallMessage}
+                </div>
+              )}
             </div>
             
             {/* Quick reason why */}
@@ -2344,9 +2365,9 @@ const AustralianFireCalculator = () => {
               strokeDasharray="5 5"
               label={{ value: `Retirement: ${retirementAge}`, position: "top" }}
             />
-            {dwzEarliestAge != null && (
+            {decision.earliestFireAge != null && (
               <ReferenceLine
-                x={dwzEarliestAge}
+                x={decision.earliestFireAge}
                 stroke="#059669"
                 strokeDasharray="4 3"
                 label={{ value: 'Earliest FIRE (DWZ)', position: 'top', fill: '#059669', fontSize: 12 }}
