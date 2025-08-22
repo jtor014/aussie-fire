@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { kpisFromState, extractDisplayKpis } from './selectors/kpis.js';
+import { decisionFromState, getDecisionDisplay, getComparisonStrip } from './selectors/decision.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import auRules from './data/au_rules.json';
 import { calcIncomeTax, getMarginalRate } from './core/tax';
@@ -693,6 +694,46 @@ const AustralianFireCalculator = () => {
     inflationRate, adjustForInflation, dieWithZeroMode,
     planningAs, partnerB
   ]);
+
+  // Unified decision logic for all UI components
+  const decision = useMemo(() => {
+    const state = {
+      currentAge,
+      retirementAge,
+      lifeExpectancy,
+      currentSavings,
+      currentSuper,
+      annualIncome,
+      annualExpenses,
+      hecsDebt,
+      hasPrivateHealth,
+      additionalSuperContributions,
+      hasInsuranceInSuper,
+      insurancePremiums,
+      expectedReturn,
+      investmentFees,
+      safeWithdrawalRate,
+      inflationRate,
+      adjustForInflation,
+      dieWithZeroMode,
+      planningAs,
+      partnerB
+    };
+    
+    return decisionFromState(state, auRules);
+  }, [
+    currentAge, retirementAge, lifeExpectancy,
+    currentSavings, currentSuper, annualIncome, annualExpenses,
+    hecsDebt, hasPrivateHealth, additionalSuperContributions,
+    hasInsuranceInSuper, insurancePremiums,
+    expectedReturn, investmentFees, safeWithdrawalRate,
+    inflationRate, adjustForInflation, dieWithZeroMode,
+    planningAs, partnerB
+  ]);
+
+  // Display-ready decision data
+  const decisionDisplay = useMemo(() => getDecisionDisplay(decision), [decision]);
+  const comparisonStrip = useMemo(() => getComparisonStrip(decision), [decision]);
 
   // Legacy compatibility - map KPIs to existing calculation structure
   const calculations = useMemo(() => {
@@ -2003,7 +2044,10 @@ const AustralianFireCalculator = () => {
         {dieWithZeroMode && (
           <>
             <div style={inputGroupStyle}>
-              <label style={labelStyle}>Life expectancy: {lifeExpectancy}</label>
+              <label style={labelStyle}>Life expectancy (DWZ horizon): {lifeExpectancy}</label>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
+                Plans to roughly deplete by this age; earlier retirement is possible if you accept this horizon.
+              </div>
               <input
                 type="range"
                 min="75"
@@ -2015,7 +2059,7 @@ const AustralianFireCalculator = () => {
             </div>
 
             {/* DWZ Insights Panel (Phase 3) - New reactive version */}
-            {dieWithZeroMode && dwzOutputs && (
+            {decision.mode === 'DWZ' && (
               <div style={{marginTop:12, padding:12, border:'1px solid #e5e7eb', borderRadius:8}}>
                 <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', gap:12}}>
                   <div>
@@ -2053,7 +2097,16 @@ const AustralianFireCalculator = () => {
                 <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
                   Real (today's) dollars. Outside money covers the bridge until super unlocks at preservation age. Life expectancy set to {lifeExpectancy}.
                 </div>
-                {flags.dwzShowEarliestFire && dwzOutputs && dwzOutputs.earliest == null && (
+                {/* Constraint explanation */}
+                {planningAs === 'single' && kpis.bindingConstraint && (
+                  <div style={{marginTop:6, fontSize:11, color:'#9ca3af', fontStyle:'italic'}}>
+                    {kpis.bindingConstraint === 'bridge' 
+                      ? `Bound by bridge to age ${auRules.preservation_age || 60} — longevity changes won't move Earliest until post-preservation becomes limiting.`
+                      : 'Bound by post-preservation horizon — longevity will affect Earliest.'
+                    }
+                  </div>
+                )}
+                {flags.dwzShowEarliestFire && decision.mode === 'DWZ' && decision.earliestFireAge == null && (
                   <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
                     At current assumptions, the plan spend isn't sustainable before life expectancy.
                     Try lowering spend, increasing contributions, or adjusting returns.
@@ -2062,6 +2115,33 @@ const AustralianFireCalculator = () => {
               </div>
             )}
           </>
+        )}
+        
+        {/* DWZ vs SWR Comparison Strip */}
+        {comparisonStrip && (
+          <div style={{
+            marginTop: 16,
+            padding: 12,
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: 8,
+            fontSize: 13
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 8, color: '#374151' }}>
+              Retirement Timing Comparison
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ color: '#6b7280' }}>
+                {comparisonStrip.swrText}
+              </div>
+              <div style={{ color: '#6b7280' }}>
+                {comparisonStrip.dwzText}
+              </div>
+              <div style={{ color: '#059669', fontWeight: 600, marginTop: 4 }}>
+                {comparisonStrip.benefitText}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
@@ -2125,12 +2205,12 @@ const AustralianFireCalculator = () => {
             <div style={errorStyle}>
               ⚠️ Please enter your annual expenses to calculate retirement
             </div>
-          ) : calculations.canRetire ? (
+          ) : decision.canRetireAtTarget ? (
           <div>
             {/* Main Message - Big and Clear */}
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
               <div style={{ fontSize: '32px', fontWeight: '700', color: '#059669', marginBottom: '8px' }}>
-                ✅ You can retire at {fireAgeForUi}!
+                {decisionDisplay.primaryMessage}
               </div>
             </div>
             
@@ -2217,13 +2297,13 @@ const AustralianFireCalculator = () => {
           <div>
             <div style={{ textAlign: 'center', marginBottom: '24px' }}>
               <div style={{ fontSize: '28px', fontWeight: '700', color: '#dc2626', marginBottom: '12px' }}>
-                ❌ Cannot retire at {retirementAge}
+                {decisionDisplay.primaryMessage}
               </div>
-              <div style={{ fontSize: '20px', color: '#374151' }}>
-                Need <span style={{ fontWeight: '700', color: '#dc2626' }}>
-                  {formatCurrency(calculations.shortfall)}
-                </span> more
-              </div>
+              {decisionDisplay.shortfallMessage && (
+                <div style={{ fontSize: '20px', color: '#374151' }}>
+                  {decisionDisplay.shortfallMessage}
+                </div>
+              )}
             </div>
             
             {/* Quick reason why */}
@@ -2285,9 +2365,9 @@ const AustralianFireCalculator = () => {
               strokeDasharray="5 5"
               label={{ value: `Retirement: ${retirementAge}`, position: "top" }}
             />
-            {dwzEarliestAge != null && (
+            {decision.earliestFireAge != null && (
               <ReferenceLine
-                x={dwzEarliestAge}
+                x={decision.earliestFireAge}
                 stroke="#059669"
                 strokeDasharray="4 3"
                 label={{ value: 'Earliest FIRE (DWZ)', position: 'top', fill: '#059669', fontSize: 12 }}

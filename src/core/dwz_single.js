@@ -26,7 +26,7 @@ export function getAtRetirementBalances(p, R) {
   return { outAtR, supAtR, rRetOut: p.rRetOut, rRetSup: p.rRetSup, P: p.P };
 }
 
-export function maxSpendDWZSingle(p, R, L) {
+export function maxSpendDWZSingleWithConstraint(p, R, L) {
   R = Math.max(R, p.A); const T = Math.max(L ?? p.L, R + 1);
   
   // Get at-retirement balances
@@ -41,7 +41,10 @@ export function maxSpendDWZSingle(p, R, L) {
   // Special case: if R >= P, no bridge constraint, just use combined pool
   if (R >= p.P) {
     const totAtR = outAtR + supAtR;
-    return pmt(totAtR, rO, T - R);
+    return {
+      spend: pmt(totAtR, rO, T - R),
+      constraint: 'post'  // Only post-preservation constraint applies
+    };
   }
 
   // Bridge case: R < P, must respect outside-only constraint
@@ -92,11 +95,26 @@ export function maxSpendDWZSingle(p, R, L) {
       if (Math.abs(hi - lo) < EPS) break;
     }
     
-    return Math.max(0, lo);
+    const postConstraint = Math.max(0, lo);
+    
+    // Determine which constraint is binding
+    const constraint = postConstraint < (bridgeConstraint - EPS) ? 'post' : 'bridge';
+    
+    return {
+      spend: postConstraint,
+      constraint
+    };
   } else {
     // No post-preservation period, just use bridge constraint
-    return Math.max(0, bridgeConstraint);
+    return {
+      spend: Math.max(0, bridgeConstraint),
+      constraint: 'bridge'
+    };
   }
+}
+
+export function maxSpendDWZSingle(p, R, L) {
+  return maxSpendDWZSingleWithConstraint(p, R, L).spend;
 }
 
 export function earliestFireAgeDWZSingle(p, requiredSpend, L) {

@@ -1,6 +1,6 @@
 import { calcIncomeTax } from '../core/tax.js';
 import { calcSuperContribs } from '../core/super.js';
-import { dwzFromSingleState, maxSpendDWZSingle, earliestFireAgeDWZSingle } from '../core/dwz_single.js';
+import { dwzFromSingleState, maxSpendDWZSingle, maxSpendDWZSingleWithConstraint, earliestFireAgeDWZSingle } from '../core/dwz_single.js';
 import { assessBridge } from '../core/bridge.js';
 import * as Money from '../lib/money.js';
 
@@ -126,6 +126,7 @@ export function kpisFromState(state, rules) {
   // === Die With Zero Calculations ===
   let sustainableSpend = annualExpenses;
   let earliestFireAge = null;
+  let bindingConstraint = null;
   
   if (dieWithZeroMode) {
     // Use simple annuity calculation for predictable life expectancy reactivity
@@ -152,7 +153,7 @@ export function kpisFromState(state, rules) {
       }
     }
     
-    // Try DWZ engine for earliestFireAge only (if single mode)
+    // Try DWZ engine for detailed constraint analysis (if single mode)
     if (planningAs === 'single') {
       const assumptions = {
         nominalReturnOutside: expectedReturn / 100,
@@ -168,6 +169,11 @@ export function kpisFromState(state, rules) {
         income: annualIncome,
         extraSuper: additionalSuperContributions
       }, assumptions, rules);
+      
+      // Get sustainable spend with constraint information
+      const dwzResult = maxSpendDWZSingleWithConstraint(dwzParams, retirementAge, lifeExpectancy);
+      sustainableSpend = dwzResult.spend;
+      bindingConstraint = dwzResult.constraint;
       
       // Earliest possible FIRE age
       earliestFireAge = earliestFireAgeDWZSingle(dwzParams, annualExpenses, lifeExpectancy);
@@ -211,6 +217,7 @@ export function kpisFromState(state, rules) {
     // DWZ metrics
     sustainableSpend,
     earliestFireAge,
+    bindingConstraint,
     
     // Bridge metrics
     bridgeAssessment,
