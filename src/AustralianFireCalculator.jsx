@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { kpisFromState, extractDisplayKpis } from './selectors/kpis.js';
-import { decisionFromState, getDecisionDisplay, getComparisonStrip } from './selectors/decision.js';
+import { decisionFromState, getDecisionDisplay } from './selectors/decision.js';
+import { depletionFromDecision } from './selectors/depletion.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import auRules from './data/au_rules.json';
 import { calcIncomeTax, getMarginalRate } from './core/tax';
@@ -298,6 +299,7 @@ const AustralianFireCalculator = () => {
   const [currentSuper, setCurrentSuper] = useState(DEFAULTS.superStart);
   const [dieWithZeroMode, setDieWithZeroMode] = useState(false);
   const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULTS.longevity);
+  const [bequest, setBequest] = useState(0);
 
   // Assumptions Panel
   const [showAssumptions, setShowAssumptions] = useState(() => {
@@ -306,8 +308,12 @@ const AustralianFireCalculator = () => {
   });
   const [expectedReturn, setExpectedReturn] = useState(8.5);
   const [investmentFees, setInvestmentFees] = useState(0.5);
-  const [safeWithdrawalRate, setSafeWithdrawalRate] = useState(3.5);
   const [adjustForInflation, setAdjustForInflation] = useState(true);
+  
+  // Legacy variables for backward compatibility (not used in DWZ-only mode)
+  const safeWithdrawalRate = 3.5;
+  const fireMultiplier = 100 / safeWithdrawalRate;
+  const fireNumber = annualExpenses * fireMultiplier;
   const [inflationRate, setInflationRate] = useState(2.5);
   const [showInTodaysDollars, setShowInTodaysDollars] = useState(true);
   const [hecsDebt, setHecsDebt] = useState(0);
@@ -370,21 +376,19 @@ const AustralianFireCalculator = () => {
   // Calculated assumptions
   const netReturn = (expectedReturn - investmentFees) / 100;
   const realReturn = adjustForInflation ? ((1 + netReturn) / (1 + inflationRate / 100)) - 1 : netReturn;
-  const fireMultiplier = 100 / safeWithdrawalRate;
-  const fireNumber = annualExpenses * fireMultiplier;
+  // Legacy fireNumber removed - DWZ uses stepped spending instead
 
-  // Preset scenarios
+  // Preset scenarios (SWR removed for DWZ-only mode)
   const presets = {
-    optimistic: { return: 10, fees: 0.3, swr: 4, inflation: 2 },
-    balanced: { return: 8.5, fees: 0.5, swr: 3.5, inflation: 2.5 },
-    pessimistic: { return: 6, fees: 0.8, swr: 3, inflation: 3 },
-    gfc: { return: 4, fees: 1.2, swr: 2.5, inflation: 4 }
+    optimistic: { return: 10, fees: 0.3, inflation: 2 },
+    balanced: { return: 8.5, fees: 0.5, inflation: 2.5 },
+    pessimistic: { return: 6, fees: 0.8, inflation: 3 },
+    gfc: { return: 4, fees: 1.2, inflation: 4 }
   };
 
   const applyPreset = (preset) => {
     setExpectedReturn(presets[preset].return);
     setInvestmentFees(presets[preset].fees);
-    setSafeWithdrawalRate(presets[preset].swr);
     setInflationRate(presets[preset].inflation);
   };
 
@@ -392,7 +396,7 @@ const AustralianFireCalculator = () => {
   const saveToLocalStorage = () => {
     const settings = {
       currentAge, retirementAge, currentSavings, annualIncome, annualExpenses, currentSuper,
-      dieWithZeroMode, lifeExpectancy, expectedReturn, investmentFees, safeWithdrawalRate,
+      dieWithZeroMode, lifeExpectancy, expectedReturn, investmentFees, bequest,
       adjustForInflation, inflationRate, showInTodaysDollars, hecsDebt, hasPrivateHealth,
       showAdvancedSuper, additionalSuperContributions, hasInsuranceInSuper, insurancePremiums, showItemizedInsurance
     };
@@ -415,7 +419,7 @@ const AustralianFireCalculator = () => {
         setLifeExpectancy(settings.lifeExpectancy || 90);
         setExpectedReturn(settings.expectedReturn || 8.5);
         setInvestmentFees(settings.investmentFees || 0.5);
-        setSafeWithdrawalRate(settings.safeWithdrawalRate || 3.5);
+        setBequest(settings.bequest || 0);
         setAdjustForInflation(settings.adjustForInflation ?? true);
         setInflationRate(settings.inflationRate || 2.5);
         setShowInTodaysDollars(settings.showInTodaysDollars ?? true);
@@ -480,7 +484,7 @@ const AustralianFireCalculator = () => {
     setLifeExpectancy(90);
     setExpectedReturn(8.5);
     setInvestmentFees(0.5);
-    setSafeWithdrawalRate(3.5);
+    setBequest(0);
     setAdjustForInflation(true);
     setInflationRate(2.5);
     setShowInTodaysDollars(true);
@@ -509,7 +513,7 @@ const AustralianFireCalculator = () => {
       setLifeExpectancy(parseInt(urlParams.get('life')) || 90);
       setExpectedReturn(parseFloat(urlParams.get('return')) || 8.5);
       setInvestmentFees(parseFloat(urlParams.get('fees')) || 0.5);
-      setSafeWithdrawalRate(parseFloat(urlParams.get('swr')) || 3.5);
+      setBequest(parseFloat(urlParams.get('bequest')) || 0);
       setAdjustForInflation(urlParams.get('inflation') !== '0');
       setInflationRate(parseFloat(urlParams.get('inflationRate')) || 2.5);
       setShowInTodaysDollars(urlParams.get('todayDollars') !== '0');
@@ -676,7 +680,7 @@ const AustralianFireCalculator = () => {
       insurancePremiums,
       expectedReturn,
       investmentFees,
-      safeWithdrawalRate,
+      bequest,
       inflationRate,
       adjustForInflation,
       dieWithZeroMode,
@@ -712,7 +716,7 @@ const AustralianFireCalculator = () => {
       insurancePremiums,
       expectedReturn,
       investmentFees,
-      safeWithdrawalRate,
+      bequest,
       inflationRate,
       adjustForInflation,
       dieWithZeroMode,
@@ -733,7 +737,24 @@ const AustralianFireCalculator = () => {
 
   // Display-ready decision data
   const decisionDisplay = useMemo(() => getDecisionDisplay(decision), [decision]);
-  const comparisonStrip = useMemo(() => getComparisonStrip(decision), [decision]);
+  
+  // DWZ depletion path data for charting
+  const depletionData = useMemo(() => {
+    const state = {
+      currentAge,
+      lifeExpectancy,
+      bequest,
+      annualIncome,
+      annualExpenses,
+      currentSavings,
+      currentSuper,
+      expectedReturn,
+      inflationRate
+    };
+    
+    return depletionFromDecision(state, decision, auRules);
+  }, [decision, currentAge, lifeExpectancy, bequest, annualIncome, annualExpenses, 
+      currentSavings, currentSuper, expectedReturn, inflationRate]);
 
   // Legacy compatibility - map KPIs to existing calculation structure
   const calculations = useMemo(() => {
@@ -774,7 +795,7 @@ const AustralianFireCalculator = () => {
       effectiveTaxRate,
       netReturn: kpis.netReturn,
       realReturn: kpis.realReturn,
-      fireNumber: kpis.fireNumber,
+      // fireNumber removed for DWZ-only mode
       bridgePeriodFeasible: kpis.bridgeAssessment.feasible,
       bridgePeriodShortfall: kpis.bridgeAssessment.shortfall,
       bridgePeriodDetails: kpis.bridgeAssessment,
@@ -845,211 +866,28 @@ const AustralianFireCalculator = () => {
   const fireAgeForUi = dwzEarliestAge ?? retirementAge;
   const yearsToFreedom = Math.max(0, fireAgeForUi - currentAge);
 
-  // Chart data generation
+  // Chart data generation using DWZ depletion path
   const chartDataSingle = useMemo(() => {
-    const data = [];
-
-    // Stable guard using DWZ earliest age
-    const dwzOn = dieWithZeroMode && flags.dwzEnabled && Number.isFinite(dwzOutputs?.earliest);
-    
-    if (dwzOn && dwzOutputs?.W) {
-      const realR = (expectedReturn/100 - inflationRate/100);
-      const pAge   = getPreservationAge(currentAge, auRules);
-
-      // use the *DWZ earliest* age for the splice point
-      const Rchart = dwzEarliestAge ?? retirementAge;
-
-      // 1) pre-FIRE accumulation using existing savings + super contributions
-      const tax = calcIncomeTax(annualIncome, { hasPrivateHealth, hecsDebt }, auRules);
-      const afterTaxIncome = Math.max(0, annualIncome - tax);
-      const annualSavings = Math.max(0, afterTaxIncome - annualExpenses);
-      const { netSuperContribution } = calculations; // this is already computed
-
-      const pre = simulateAccumToAge({
-        startAge: currentAge,
-        endAge: Rchart,
-        out0: currentSavings,
-        sup0: currentSuper,
-        annualSavings,
-        netSuperContribution,
-        r: realR
-      });
-
-      pre.pts.forEach(pt => {
-        data.push({
-          age: pt.age,
-          outsideSuper: pt.outside,
-          superBalance: pt.super,
-          totalWealth: pt.outside + pt.super,
-          spendToZeroWealth: pt.outside + pt.super,
-          fireNumber: calculations.fireNumber
-        });
-      });
-
-      // 2) post-FIRE DWZ drawdown from Rchart → life expectancy
-      const pts = seriesSingle(
-        { outAtR: pre.out, supAtR: pre.sup, rOut: realR, rSup: realR, P: pAge },
-        Rchart,
-        lifeExpectancy,
-        annualExpenses
-      );
-
-      pts.forEach(pt => {
-        data.push({
-          age: pt.age,
-          outsideSuper: pt.out,
-          superBalance: pt.sup,
-          totalWealth: pt.out + pt.sup,
-          spendToZeroWealth: pt.out + pt.sup,
-          fireNumber: calculations.fireNumber
-        });
-      });
-
-      return data;
+    if (!depletionData?.path) {
+      return [];
     }
 
-    // legacy path (DWZ disabled)
-    data.length = 0; // clear the array
-    const { returnRate, netSuperContribution, fireNumber } = calculations;
-    const tax = calcIncomeTax(annualIncome, { hasPrivateHealth, hecsDebt }, auRules);
-    const afterTaxIncome = annualIncome - tax;
-    const annualSavings = afterTaxIncome - annualExpenses;
-
-    let outsideSuper = currentSavings;
-    let superBalance = currentSuper;
-    let spendToZeroOutside = currentSavings;
-    let spendToZeroSuper = currentSuper;
-
-    const initial4PercentWithdrawal = calculations.totalWealth * (safeWithdrawalRate / 100);
-    const initialSpendToZeroWithdrawal = calculations.spendToZeroAmount;
-
-    for (let age = currentAge; age <= Math.max(90, lifeExpectancy + 5); age++) {
-      
-      if (age < retirementAge) {
-        if (annualSavings > 0) {
-          outsideSuper += annualSavings;
-          spendToZeroOutside += annualSavings;
-        }
-        superBalance += netSuperContribution;
-        spendToZeroSuper += netSuperContribution;
-
-        outsideSuper *= (1 + returnRate);
-        superBalance *= (1 + returnRate);
-        spendToZeroOutside *= (1 + returnRate);
-        spendToZeroSuper *= (1 + returnRate);
-      }
-      else if (age >= retirementAge) {
-        
-        const totalWealthStandard = outsideSuper + superBalance;
-        if (totalWealthStandard > 0 && initial4PercentWithdrawal > 0) {
-          let withdrawal = initial4PercentWithdrawal;
-          
-          if (age < 60) {
-            const maxOutsideWithdrawal = Math.min(withdrawal, outsideSuper);
-            outsideSuper -= maxOutsideWithdrawal;
-          } else {
-            const outsideRatio = outsideSuper / totalWealthStandard;
-            const superRatio = superBalance / totalWealthStandard;
-            outsideSuper = Math.max(0, outsideSuper - (withdrawal * outsideRatio));
-            superBalance = Math.max(0, superBalance - (withdrawal * superRatio));
-          }
-
-          outsideSuper *= (1 + returnRate);
-          superBalance *= (1 + returnRate);
-        }
-
-        if (dieWithZeroMode) {
-          const totalWealthSpendToZero = spendToZeroOutside + spendToZeroSuper;
-          if (totalWealthSpendToZero > 0 && initialSpendToZeroWithdrawal > 0) {
-            let withdrawal = initialSpendToZeroWithdrawal;
-            
-            if (age < 60) {
-              const maxOutsideWithdrawal = Math.min(withdrawal, spendToZeroOutside);
-              spendToZeroOutside -= maxOutsideWithdrawal;
-            } else {
-              const outsideRatio = spendToZeroOutside / totalWealthSpendToZero;
-              const superRatio = spendToZeroSuper / totalWealthSpendToZero;
-              spendToZeroOutside = Math.max(0, spendToZeroOutside - (withdrawal * outsideRatio));
-              spendToZeroSuper = Math.max(0, spendToZeroSuper - (withdrawal * superRatio));
-            }
-
-            spendToZeroOutside *= (1 + returnRate);
-            spendToZeroSuper *= (1 + returnRate);
-          }
-        }
-      }
-
-      data.push({
-        age,
-        outsideSuper: Math.max(0, outsideSuper),
-        superBalance: Math.max(0, superBalance),
-        totalWealth: Math.max(0, outsideSuper + superBalance),
-        spendToZeroWealth: dieWithZeroMode ? Math.max(0, spendToZeroOutside + spendToZeroSuper) : (outsideSuper + superBalance),
-        fireNumber
-      });
-    }
-
-    return data;
-  }, [
-    dieWithZeroMode, flags.dwzEnabled, dwzOutputs?.earliest, dwzOutputs?.W, dwzOutputs?.L,
-    calculations, currentAge, currentSavings, currentSuper, annualExpenses, 
-    retirementAge, lifeExpectancy, annualIncome, safeWithdrawalRate, hasPrivateHealth, hecsDebt, auRules
-  ]);
+    // Convert depletion path to chart format
+    return depletionData.path.map(point => ({
+      age: point.age,
+      outsideSuper: point.outside,
+      superBalance: point.super,
+      totalWealth: point.total,
+      spendToZeroWealth: point.total, // Same as total wealth in DWZ
+      spend: point.spend
+    }));
+  }, [depletionData]);
 
   const chartDataCouple = useMemo(() => {
-    // COUPLE: Switch to DWZ simulation when DWZ mode is enabled
-    if (dieWithZeroMode && flags.dwzEnabled && dwzOutputs?.W && dwzOutputs?.pA && dwzOutputs?.pB) {
-      try {
-        const { pA, pB, L: Lh } = dwzOutputs;
-        
-        // Additional validation
-        if (!pA || !pB || typeof pA.outAtR !== 'number' || typeof pB.outAtR !== 'number') {
-          console.warn('Invalid pA or pB data in chartDataCouple, falling back to old path');
-          if (!coupleProjection) return null;
-          return coupleProjection.series.map(s => ({
-            age: s.age,
-            outsideSuper: s.outsideSuper,
-            superBalance: s.superBalances.reduce((a, b) => a + b, 0),
-            totalWealth: s.totalWealth,
-          }));
-        }
-        
-        const params = {
-          outA: pA.outAtR, supA: pA.supAtR,
-          outB: pB.outAtR, supB: pB.supAtR,
-          rOut: pA.rRetOut, rSup: pA.rRetSup,
-          PA: pA.P, PB: pB.P
-        };
-        const pts = simulateDwzCouple(params, retirementAge, Lh, dwzOutputs.W);
-        return pts.map(pt => ({
-          age: pt.age,
-          outsideSuper: pt.outside,
-          superBalance: pt.super,
-          totalWealth: pt.outside + pt.super,
-        }));
-      } catch (error) {
-        console.error('Error in DWZ couples chart simulation:', error);
-        // Fall back to old path
-        if (!coupleProjection) return null;
-        return coupleProjection.series.map(s => ({
-          age: s.age,
-          outsideSuper: s.outsideSuper,
-          superBalance: s.superBalances.reduce((a, b) => a + b, 0),
-          totalWealth: s.totalWealth,
-        }));
-      }
-    } else {
-      // OLD PATH: existing couple projection
-      if (!coupleProjection) return null;
-      return coupleProjection.series.map(s => ({
-        age: s.age,
-        outsideSuper: s.outsideSuper,
-        superBalance: s.superBalances.reduce((a, b) => a + b, 0),
-        totalWealth: s.totalWealth,
-      }));
-    }
-  }, [dieWithZeroMode, flags.dwzEnabled, dwzOutputs?.W, dwzOutputs?.params?.pA, dwzOutputs?.params?.pB, currentAge, currentSavings, currentSuper,
-      partnerB, expectedReturn, inflationRate, retirementAge, lifeExpectancy, auRules, coupleProjection]);
+    // Couple planning not fully supported in DWZ-only refactor
+    // Return placeholder empty array for now
+    return [];
+  }, []);
 
   const chartData = planningAs === 'couple' ? (chartDataCouple || []) : chartDataSingle;
 
@@ -1530,27 +1368,7 @@ const AustralianFireCalculator = () => {
               {adjustForInflation && ` | Real Return: ${(realReturn * 100).toFixed(1)}%`}
             </div>
 
-            {/* Withdrawal Strategy */}
-            <div style={inputGroupStyle}>
-              <label style={labelStyle}>
-                Safe Withdrawal Rate: {safeWithdrawalRate}%
-                <span style={{ fontSize: '12px', fontWeight: '400', color: '#6b7280' }}>
-                  {' '}(US studies suggest 4%, Australian FIRE community uses 3.5% for our market)
-                </span>
-              </label>
-              <input
-                type="range"
-                min="2.5"
-                max="5"
-                step="0.25"
-                value={safeWithdrawalRate}
-                onChange={(e) => setSafeWithdrawalRate(parseFloat(e.target.value))}
-                style={sliderStyle}
-              />
-              <div style={{ ...detailStyle, textAlign: 'center', marginTop: '8px' }}>
-                Need {fireMultiplier.toFixed(1)}x expenses = {formatCurrency(fireNumber)}
-              </div>
-            </div>
+            {/* SWR removed - DWZ-only mode uses stepped spending */}
 
             {/* Inflation */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
@@ -2058,6 +1876,30 @@ const AustralianFireCalculator = () => {
               />
             </div>
 
+            {/* Bequest Input */}
+            <div style={inputGroupStyle}>
+              <label style={labelStyle}>Bequest Target: ${(bequest || 0).toLocaleString()}</label>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
+                Amount you want to leave at death (real dollars). Zero means spend it all.
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="2000000"
+                step="10000"
+                value={bequest}
+                onChange={(e) => setBequest(parseInt(e.target.value) || 0)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Enter bequest amount"
+              />
+            </div>
+
             {/* DWZ Insights Panel (Phase 3) - New reactive version */}
             {decision.mode === 'DWZ' && (
               <div style={{marginTop:12, padding:12, border:'1px solid #e5e7eb', borderRadius:8}}>
@@ -2127,32 +1969,7 @@ const AustralianFireCalculator = () => {
           </>
         )}
         
-        {/* DWZ vs SWR Comparison Strip */}
-        {comparisonStrip && (
-          <div style={{
-            marginTop: 16,
-            padding: 12,
-            backgroundColor: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: 8,
-            fontSize: 13
-          }}>
-            <div style={{ fontWeight: 600, marginBottom: 8, color: '#374151' }}>
-              Retirement Timing Comparison
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ color: '#6b7280' }}>
-                {comparisonStrip.swrText}
-              </div>
-              <div style={{ color: '#6b7280' }}>
-                {comparisonStrip.dwzText}
-              </div>
-              <div style={{ color: '#059669', fontWeight: 600, marginTop: 4 }}>
-                {comparisonStrip.benefitText}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* DWZ vs SWR Comparison Strip removed - DWZ-only mode */}
       </div>
 
       {/* Enhanced Results */}
@@ -2383,20 +2200,21 @@ const AustralianFireCalculator = () => {
                 label={{ value: 'Earliest FIRE (DWZ)', position: 'top', fill: '#059669', fontSize: 12 }}
               />
             )}
-            <ReferenceLine 
-              y={calculations.fireNumber} 
-              stroke="#dc2626" 
-              strokeDasharray="3 3"
-              label={{ value: `FIRE Number (${fireMultiplier.toFixed(1)}x)`, position: "topRight" }}
-            />
-            {dieWithZeroMode && (
-              <ReferenceLine 
-                x={lifeExpectancy} 
-                stroke="#f59e0b" 
+            {depletionData?.markers?.map((marker, index) => (
+              <ReferenceLine
+                key={index}
+                x={marker.x}
+                stroke={marker.type === 'preservation' ? '#8b5cf6' : '#f59e0b'}
                 strokeDasharray="8 4"
-                label={{ value: `Life Expectancy: ${lifeExpectancy}`, position: "topLeft" }}
+                label={{ value: marker.label, position: "topLeft" }}
               />
-            )}
+            ))}
+            <ReferenceLine 
+              x={lifeExpectancy} 
+              stroke="#f59e0b" 
+              strokeDasharray="8 4"
+              label={{ value: `Life Expectancy: ${lifeExpectancy}`, position: "topLeft" }}
+            />
 
             <Line 
               type="monotone" 
@@ -2419,20 +2237,9 @@ const AustralianFireCalculator = () => {
               dataKey="totalWealth" 
               stroke="#10b981" 
               strokeWidth={3}
-              name={`Total Wealth (${safeWithdrawalRate}% Rule)`}
+              name="Total Wealth (DWZ)"
               dot={false}
             />
-            {dieWithZeroMode && (
-              <Line 
-                type="monotone" 
-                dataKey="spendToZeroWealth" 
-                stroke="#f59e0b" 
-                strokeWidth={3}
-                strokeDasharray="8 4"
-                name="Spend to Zero Wealth"
-                dot={false}
-              />
-            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
