@@ -322,13 +322,13 @@ export function getStrategyDisplay(strategy) {
           capUse: recommendations.person1.capUtilization
         },
         person2: {
-          salaryService: recommendations.person2.salaryService,
+          salarysacrifice: recommendations.person2.salarysacrifice,
           capUse: recommendations.person2.capUtilization
         },
         outside: recommendations.outsideInvestment.amount
       },
       
-      summary: `Retire at ${earliestRetirementAge} with $${Math.round(recommendations.person1.salaryService).toLocaleString()} + $${Math.round(recommendations.person2.salaryService).toLocaleString()} salary sacrifice + $${Math.round(recommendations.outsideInvestment.amount).toLocaleString()} outside investments.`,
+      summary: `Retire at ${earliestRetirementAge} with $${Math.round(recommendations.person1.salarysacrifice).toLocaleString()} + $${Math.round(recommendations.person2.salarysacrifice).toLocaleString()} salary sacrifice + $${Math.round(recommendations.outsideInvestment.amount).toLocaleString()} outside investments.`,
       
       rationale: rationale,
       canOptimize: true
@@ -342,12 +342,12 @@ export function getStrategyDisplay(strategy) {
       targetSpend,
       
       splits: {
-        salaryService: recommendations.salaryService.amount,
+        salarysacrifice: recommendations.salarysacrifice.amount,
         outside: recommendations.outsideInvestment.amount,
         capUse: capAnalysis.capUtilization
       },
       
-      summary: `Retire at ${earliestRetirementAge} with $${Math.round(recommendations.salaryService.amount).toLocaleString()} salary sacrifice (${capAnalysis.capUtilization}% of cap) + $${Math.round(recommendations.outsideInvestment.amount).toLocaleString()} outside investments.`,
+      summary: `Retire at ${earliestRetirementAge} with $${Math.round(recommendations.salarysacrifice.amount).toLocaleString()} salary sacrifice (${capAnalysis.capUtilization}% of cap) + $${Math.round(recommendations.outsideInvestment.amount).toLocaleString()} outside investments.`,
       
       rationale: rationale,
       canOptimize: true
