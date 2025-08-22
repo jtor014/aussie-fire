@@ -653,7 +653,6 @@ const AustralianFireCalculator = () => {
             lo = mid + 1;
           }
         }
-      }
 
       // series for the chart (so chart = panel truth)
       const series = seriesSingle(p, retirementAge, L, W);
