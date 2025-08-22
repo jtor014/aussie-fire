@@ -459,7 +459,7 @@ const AustralianFireCalculator = () => {
       life: lifeExpectancy,
       return: expectedReturn,
       fees: investmentFees,
-      swr: safeWithdrawalRate,
+      // swr removed in DWZ-only mode
       inflation: adjustForInflation ? '1' : '0',
       inflationRate: inflationRate,
       todayDollars: showInTodaysDollars ? '1' : '0',
@@ -701,7 +701,7 @@ const AustralianFireCalculator = () => {
     currentSavings, currentSuper, annualIncome, annualExpenses,
     hecsDebt, hasPrivateHealth, additionalSuperContributions,
     hasInsuranceInSuper, insurancePremiums,
-    expectedReturn, investmentFees, safeWithdrawalRate,
+    expectedReturn, investmentFees,
     inflationRate, adjustForInflation, dieWithZeroMode,
     planningAs, partnerB
   ]);
@@ -737,7 +737,7 @@ const AustralianFireCalculator = () => {
     currentSavings, currentSuper, annualIncome, annualExpenses,
     hecsDebt, hasPrivateHealth, additionalSuperContributions,
     hasInsuranceInSuper, insurancePremiums,
-    expectedReturn, investmentFees, safeWithdrawalRate,
+    expectedReturn, investmentFees,
     inflationRate, adjustForInflation, dieWithZeroMode,
     planningAs, partnerB
   ]);
