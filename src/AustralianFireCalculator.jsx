@@ -201,6 +201,7 @@ function PersonSituationCard({
   label,                         // "You" | "Partner"
   age, onAge,                    // numbers + setters
   retireAge, onRetireAge,
+  showRetireAge = true,          // Whether to show retirement age slider
   income, onIncome,
   savings, onSavings,            // outside super
   superBalance, onSuperBalance,
@@ -225,17 +226,19 @@ function PersonSituationCard({
       <div style={{ fontWeight:700, marginBottom:8 }}>{label} — Details</div>
 
       {/* Age & Retire Age */}
-      <div style={row}>
-        <div>
+      <div style={showRetireAge ? row : { marginTop: 12 }}>
+        <div style={showRetireAge ? {} : { width: '50%' }}>
           <label style={labelCss}>Current Age: <strong>{age}</strong></label>
           <input type="range" min={18} max={75} value={age}
                  onChange={e=>onAge(parseInt(e.target.value)||age)} style={slider}/>
         </div>
-        <div>
-          <label style={labelCss}>Target Retirement Age: <strong>{retireAge}</strong></label>
-          <input type="range" min={30} max={80} value={retireAge}
-                 onChange={e=>onRetireAge(parseInt(e.target.value)||retireAge)} style={slider}/>
-        </div>
+        {showRetireAge && (
+          <div>
+            <label style={labelCss}>Target Retirement Age: <strong>{retireAge}</strong></label>
+            <input type="range" min={30} max={80} value={retireAge}
+                   onChange={e=>onRetireAge(parseInt(e.target.value)||retireAge)} style={slider}/>
+          </div>
+        )}
       </div>
 
       {/* Income */}
@@ -327,6 +330,10 @@ const AustralianFireCalculator = () => {
 
   // Planning mode
   const [planningAs, setPlanningAs] = useState('single'); // 'single' | 'couple'
+  
+  // DWZ Planning mode: earliest-first vs pin age
+  const [dwzPlanningMode, setDwzPlanningMode] = useState('earliest'); // 'earliest' | 'pinned'
+  const [pinnedRetirementAge, setPinnedRetirementAge] = useState(retirementAge);
 
   // DWZ Feature flags (Phase 0 - safe switches)
   const [flags] = useState({
@@ -1112,13 +1119,56 @@ const AustralianFireCalculator = () => {
           </div>
         </div>
 
+        {/* DWZ Planning Mode */}
+        <div style={{ 
+          marginBottom: 16, 
+          padding: '12px', 
+          backgroundColor: '#f8fafc', 
+          borderRadius: '8px',
+          border: '1px solid #e5e7eb' 
+        }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+            🎯 DWZ Planning Mode
+          </div>
+          <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input 
+                type="radio" 
+                checked={dwzPlanningMode === 'earliest'} 
+                onChange={() => setDwzPlanningMode('earliest')}
+              />
+              <span>
+                <strong>Earliest</strong> (recommended)
+                <div style={{ fontSize: 11, color: '#6b7280' }}>
+                  Find when you can retire at your desired spending level
+                </div>
+              </span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input 
+                type="radio" 
+                checked={dwzPlanningMode === 'pinned'} 
+                onChange={() => setDwzPlanningMode('pinned')}
+              />
+              <span>
+                <strong>Pin age</strong>
+                <div style={{ fontSize: 11, color: '#6b7280' }}>
+                  Check if you can retire at a specific age
+                </div>
+              </span>
+            </label>
+          </div>
+        </div>
+
         {/* Unified person cards */}
         <div style={{ display:'grid', gridTemplateColumns: planningAs==='couple' ? '1fr 1fr' : '1fr', gap:16 }}>
           {/* Person A */}
           <PersonSituationCard
             label="You"
             age={currentAge}                 onAge={setCurrentAge}
-            retireAge={retirementAge}        onRetireAge={setRetirementAge}
+            retireAge={dwzPlanningMode === 'pinned' ? (pinnedRetirementAge || retirementAge) : retirementAge}        
+            onRetireAge={dwzPlanningMode === 'pinned' ? setPinnedRetirementAge : setRetirementAge}
+            showRetireAge={dwzPlanningMode === 'pinned'}
             income={annualIncome}            onIncome={setAnnualIncome}
             savings={currentSavings}         onSavings={setCurrentSavings}
             superBalance={currentSuper}      onSuperBalance={setCurrentSuper}
@@ -1133,6 +1183,7 @@ const AustralianFireCalculator = () => {
               label="Partner"
               age={partnerB.currentAge}            onAge={v=>setPartnerB(p=>({ ...p, currentAge:v }))}
               retireAge={partnerB.retireAge}       onRetireAge={v=>setPartnerB(p=>({ ...p, retireAge:v }))}
+              showRetireAge={dwzPlanningMode === 'pinned'}
               income={partnerB.income}             onIncome={v=>setPartnerB(p=>({ ...p, income:v }))}
               savings={partnerB.liquidStart}       onSavings={v=>setPartnerB(p=>({ ...p, liquidStart:v }))}
               superBalance={partnerB.superStart}   onSuperBalance={v=>setPartnerB(p=>({ ...p, superStart:v }))}
@@ -1979,72 +2030,88 @@ const AustralianFireCalculator = () => {
               />
             </div>
 
-            {/* DWZ Insights Panel (Phase 3) - New reactive version */}
-            {decision.mode === 'DWZ' && (
-              <div style={{marginTop:12, padding:12, border:'1px solid #e5e7eb', borderRadius:8}}>
-                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', gap:12}}>
+            {/* DWZ Banner & Results - Updated for earliest-first */}
+            <div style={{
+              marginTop: 16, 
+              padding: 16, 
+              border: '2px solid #e5e7eb', 
+              borderRadius: 12,
+              backgroundColor: decision.earliestFireAge ? '#f0fdf4' : '#fef2f2',
+              borderColor: decision.earliestFireAge ? '#16a34a' : '#dc2626'
+            }}>
+              {/* Main Banner */}
+              <div style={{ 
+                textAlign: 'center', 
+                marginBottom: 16,
+                fontSize: 18,
+                fontWeight: 600 
+              }}>
+{decision.earliestFireAge ? (
+                  dwzPlanningMode === 'earliest' ? (
+                    <React.Fragment>
+                      🎯 <span style={{ color: '#16a34a' }}>You can retire at age {decision.targetAge}</span> with DWZ
+                    </React.Fragment>
+                  ) : (
+                    decision.canRetireAtTarget ? (
+                      <React.Fragment>
+                        ✅ <span style={{ color: '#16a34a' }}>On track to retire at age {decision.targetAge}</span>
+                        {decision.earliestFireAge < decision.targetAge && (
+                          <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 400, marginTop: 4 }}>
+                            Earliest possible: Age {decision.earliestFireAge} ({decision.targetAge - decision.earliestFireAge} years earlier)
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ) : (
+                      <React.Fragment>
+                        ❌ <span style={{ color: '#dc2626' }}>Cannot retire at age {decision.targetAge}</span>
+                        <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 400, marginTop: 4 }}>
+                          Earliest possible today: Age {decision.earliestFireAge}
+                        </div>
+                      </React.Fragment>
+                    )
+                  )
+                ) : (
+                  <span style={{ color: '#dc2626' }}>Not viable with current DWZ settings</span>
+                )}
+              </div>
+
+              {/* DWZ Details Grid */}
+              {decision.earliestFireAge && (
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px,1fr))', gap:12, marginTop:16}}>
                   <div>
                     <div style={{fontSize:13, color:'#4b5563'}}>Sustainable spend (real)</div>
-                    <div style={{fontSize:20, fontWeight:700}}>
+                    <div style={{fontSize:18, fontWeight:600}}>
                       {decisionDisplay.sustainableSpend || `$${Math.round(kpis.sustainableSpend).toLocaleString()}/yr`}
                     </div>
                   </div>
                   <div>
                     <div style={{fontSize:13, color:'#4b5563'}}>Your plan spend</div>
-                    <div style={{fontSize:20, fontWeight:700}}>
+                    <div style={{fontSize:18, fontWeight:600}}>
                       ${Math.round(annualExpenses).toLocaleString()}/yr
                     </div>
                   </div>
                   <div>
-                    <div style={{fontSize:13, color:'#4b5563'}}>Status vs plan</div>
-                    <div style={{fontSize:20, fontWeight:700, color: decisionDisplay.status === 'success' ? '#059669' : '#dc2626'}}>
-                      {decisionDisplay.statusDetail || (decisionDisplay.status === 'success' ? 'OK' : 'Shortfall')}
+                    <div style={{fontSize:13, color:'#4b5563'}}>Status</div>
+                    <div style={{fontSize:18, fontWeight:600, color: decision.canRetireAtTarget ? '#059669' : '#dc2626'}}>
+                      {decision.canRetireAtTarget ? 'Viable' : 'Shortfall'}
                     </div>
                   </div>
-                  {kpis.earliestFireAge != null && (
-                    <div>
-                      <div style={{fontSize:13, color:'#4b5563'}}>Earliest FIRE age (same spend)</div>
-                      <div style={{fontSize:20, fontWeight:700}}>
-                        {kpis.earliestFireAge}
-                        {kpis.earliestFireAge < retirementAge &&
-                          <span style={{marginLeft:8, fontSize:14, color:'#059669'}}>
-                            ({retirementAge - kpis.earliestFireAge} yrs earlier)
-                          </span>
-                        }
-                      </div>
-                      {decisionDisplay.earliestConstraintCaption && (
-                        <div style={{fontSize:11, color:'#6b7280', marginTop:4, lineHeight:'1.3'}}>
-                          {decisionDisplay.earliestConstraintCaption}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
-                <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
-                  Real (today's) dollars. Outside money covers the bridge until super unlocks at preservation age. Life expectancy set to {lifeExpectancy}.
-                  {decisionDisplay.steppedModeCaption && (
-                    <div style={{marginTop:4}}>
-                      {decisionDisplay.steppedModeCaption}
-                    </div>
-                  )}
-                </div>
-                {/* Constraint explanation */}
-                {planningAs === 'single' && kpis.bindingConstraint && (
-                  <div style={{marginTop:6, fontSize:11, color:'#9ca3af', fontStyle:'italic'}}>
-                    {kpis.bindingConstraint === 'bridge' 
-                      ? `Bound by bridge to age ${auRules.preservation_age || 60} — longevity changes won't move Earliest until post-preservation becomes limiting.`
-                      : 'Bound by post-preservation horizon — longevity will affect Earliest.'
-                    }
-                  </div>
-                )}
-                {flags.dwzShowEarliestFire && decision.mode === 'DWZ' && decision.earliestFireAge == null && (
-                  <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
-                    At current assumptions, the plan spend isn't sustainable before life expectancy.
-                    Try lowering spend, increasing contributions, or adjusting returns.
-                  </div>
-                )}
+              )}
+
+              {/* Additional info */}
+              <div style={{marginTop:12, fontSize:12, color:'#6b7280', textAlign:'center'}}>
+                Real (today's) dollars. Outside money covers the bridge until super unlocks at preservation age {auRules.preservation_age || 60}. Life expectancy set to {lifeExpectancy}.
               </div>
-            )}
+
+              {/* Not viable help text */}
+              {!decision.earliestFireAge && (
+                <div style={{marginTop:8, fontSize:13, color:'#6b7280', textAlign:'center'}}>
+                  At current assumptions, the plan spend isn't sustainable before life expectancy.
+                  Try lowering spend, increasing contributions, or adjusting returns.
+                </div>
+              )}
+            </div>
             
             {/* Strategy Card */}
             {strategyDisplay && (
