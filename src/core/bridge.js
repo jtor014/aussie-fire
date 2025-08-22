@@ -39,7 +39,9 @@ export function assessBridge({
   // What we need to spend each year during the bridge
   const annualNeed = Money.toNumber(Money.max(
     0,
-    dieWithZero ? Money.min(annualExpenseNeed, spendToZeroAnnual || Infinity) : Money.money(annualExpenseNeed)
+    dieWithZero && spendToZeroAnnual != null 
+      ? Money.min(annualExpenseNeed, spendToZeroAnnual) 
+      : Money.money(annualExpenseNeed)
   ));
 
   // Funds available outside super at the START of the bridge
