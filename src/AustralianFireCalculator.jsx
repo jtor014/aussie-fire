@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { kpisFromState, extractDisplayKpis } from './selectors/kpis.js';
 import { decisionFromState, getDecisionDisplay } from './selectors/decision.js';
 import { depletionFromDecision } from './selectors/depletion.js';
+import { dwzStrategyFromState, getStrategyDisplay } from './selectors/strategy.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import auRules from './data/au_rules.json';
 import { calcIncomeTax, getMarginalRate } from './core/tax';
@@ -300,6 +301,11 @@ const AustralianFireCalculator = () => {
   const [dieWithZeroMode, setDieWithZeroMode] = useState(false);
   const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULTS.longevity);
   const [bequest, setBequest] = useState(0);
+  
+  // Strategy optimization inputs
+  const [targetSpend, setTargetSpend] = useState(annualExpenses);
+  const [annualSavingsBudget, setAnnualSavingsBudget] = useState(50000);
+  const [superInsurancePremiums, setSuperInsurancePremiums] = useState(1000);
 
   // Assumptions Panel
   const [showAssumptions, setShowAssumptions] = useState(() => {
@@ -755,6 +761,32 @@ const AustralianFireCalculator = () => {
     return depletionFromDecision(state, decision, auRules);
   }, [decision, currentAge, lifeExpectancy, bequest, annualIncome, annualExpenses, 
       currentSavings, currentSuper, expectedReturn, inflationRate]);
+  
+  // Strategy optimization
+  const strategy = useMemo(() => {
+    const state = {
+      planningAs,
+      currentAge,
+      targetSpend,
+      annualSavingsBudget,
+      bequest,
+      lifeExpectancy,
+      currentSavings,
+      currentSuper,
+      annualIncome,
+      annualExpenses,
+      expectedReturn,
+      inflationRate,
+      superInsurancePremiums,
+      partnerB
+    };
+    
+    return dwzStrategyFromState(state, auRules);
+  }, [planningAs, currentAge, targetSpend, annualSavingsBudget, bequest, lifeExpectancy,
+      currentSavings, currentSuper, annualIncome, annualExpenses, expectedReturn, 
+      inflationRate, superInsurancePremiums, partnerB]);
+  
+  const strategyDisplay = useMemo(() => getStrategyDisplay(strategy), [strategy]);
 
   // Legacy compatibility - map KPIs to existing calculation structure
   const calculations = useMemo(() => {
@@ -1900,6 +1932,53 @@ const AustralianFireCalculator = () => {
               />
             </div>
 
+            {/* Strategy Optimization Inputs */}
+            <div style={inputGroupStyle}>
+              <label style={labelStyle}>Target Spending: ${(targetSpend || 0).toLocaleString()}/yr</label>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
+                Annual spending goal in retirement (real dollars). Strategy will optimize to achieve this.
+              </div>
+              <input
+                type="number"
+                min="20000"
+                max="200000"
+                step="1000"
+                value={targetSpend}
+                onChange={(e) => setTargetSpend(parseInt(e.target.value) || annualExpenses)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Annual spending target"
+              />
+            </div>
+
+            <div style={inputGroupStyle}>
+              <label style={labelStyle}>Annual Savings Budget: ${(annualSavingsBudget || 0).toLocaleString()}</label>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
+                Total amount available annually for super + outside investments. Strategy will optimize the split.
+              </div>
+              <input
+                type="number"
+                min="10000"
+                max="200000"
+                step="5000"
+                value={annualSavingsBudget}
+                onChange={(e) => setAnnualSavingsBudget(parseInt(e.target.value) || 50000)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                placeholder="Total savings budget"
+              />
+            </div>
+
             {/* DWZ Insights Panel (Phase 3) - New reactive version */}
             {decision.mode === 'DWZ' && (
               <div style={{marginTop:12, padding:12, border:'1px solid #e5e7eb', borderRadius:8}}>
@@ -1962,6 +2041,81 @@ const AustralianFireCalculator = () => {
                   <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
                     At current assumptions, the plan spend isn't sustainable before life expectancy.
                     Try lowering spend, increasing contributions, or adjusting returns.
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Strategy Card */}
+            {strategyDisplay && (
+              <div style={{marginTop:12, padding:12, border:'1px solid #e5e7eb', borderRadius:8, backgroundColor:'#f8fafc'}}>
+                <div style={{fontSize:14, fontWeight:600, color:'#374151', marginBottom:8}}>
+                  {strategyDisplay.title}
+                </div>
+                
+                {strategyDisplay.viable ? (
+                  <>
+                    <div style={{fontSize:13, color:'#4b5563', marginBottom:12}}>
+                      {strategyDisplay.summary}
+                    </div>
+                    
+                    {strategyDisplay.splits.person1 ? (
+                      // Couple display
+                      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12}}>
+                        <div>
+                          <div style={{fontSize:12, color:'#6b7280'}}>Person 1</div>
+                          <div style={{fontSize:16, fontWeight:600}}>
+                            ${strategyDisplay.splits.person1.salarysacrifice?.toLocaleString()} SAC
+                          </div>
+                          <div style={{fontSize:11, color:'#6b7280'}}>
+                            {strategyDisplay.splits.person1.capUse}% of cap
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:12, color:'#6b7280'}}>Person 2</div>
+                          <div style={{fontSize:16, fontWeight:600}}>
+                            ${strategyDisplay.splits.person2.salarysacrifice?.toLocaleString()} SAC
+                          </div>
+                          <div style={{fontSize:11, color:'#6b7280'}}>
+                            {strategyDisplay.splits.person2.capUse}% of cap
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      // Single display
+                      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12}}>
+                        <div>
+                          <div style={{fontSize:12, color:'#6b7280'}}>Salary Sacrifice</div>
+                          <div style={{fontSize:16, fontWeight:600}}>
+                            ${strategyDisplay.splits.salarysacrifice?.toLocaleString()}
+                          </div>
+                          <div style={{fontSize:11, color:'#6b7280'}}>
+                            {strategyDisplay.splits.capUse}% of cap
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:12, color:'#6b7280'}}>Outside Investment</div>
+                          <div style={{fontSize:16, fontWeight:600}}>
+                            ${strategyDisplay.splits.outside?.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <details style={{cursor:'pointer'}}>
+                      <summary style={{fontSize:13, color:'#4f46e5', fontWeight:500}}>
+                        Why this split? ▼
+                      </summary>
+                      <div style={{marginTop:8, fontSize:12, color:'#6b7280', lineHeight:'1.4'}}>
+                        {strategyDisplay.rationale?.map((reason, idx) => (
+                          <div key={idx} style={{marginBottom:4}}>• {reason}</div>
+                        ))}
+                      </div>
+                    </details>
+                  </>
+                ) : (
+                  <div style={{fontSize:13, color:'#dc2626'}}>
+                    {strategyDisplay.message}
                   </div>
                 )}
               </div>
