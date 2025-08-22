@@ -1,4 +1,5 @@
 import { kpisFromState } from './kpis.js';
+import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz_single.js';
 
 /**
  * Unified decision selector for Australian FIRE Calculator
@@ -29,6 +30,28 @@ export function decisionFromState(state, rules) {
     const earliestFireAge = kpis.earliestFireAge;
     const shortfall = canRetireAtTarget ? 0 : annualExpenses - kpis.sustainableSpend;
     
+    // Calculate binding constraint at earliest FIRE age
+    let bindingConstraintAtEarliest = null;
+    if (earliestFireAge && state.planningAs === 'single') {
+      const assumptions = {
+        nominalReturnOutside: state.expectedReturn / 100 || 0.085,
+        nominalReturnSuper: state.expectedReturn / 100 || 0.085,
+        inflation: state.inflationRate / 100 || 0.025
+      };
+      
+      const dwzParams = dwzFromSingleState({
+        currentAge: state.currentAge,
+        longevity: lifeExpectancy,
+        liquidStart: state.currentSavings || 0,
+        superStart: state.currentSuper || 0,
+        income: state.annualIncome || 0,
+        extraSuper: state.additionalSuperContributions || 0
+      }, assumptions, rules);
+      
+      const earliestResult = maxSpendDWZSingleWithConstraint(dwzParams, earliestFireAge, lifeExpectancy);
+      bindingConstraintAtEarliest = earliestResult.constraint;
+    }
+    
     // Calculate SWR comparison for the comparison strip
     const swrFireNumber = annualExpenses * (100 / safeWithdrawalRate);
     const swrEarliestAge = calculateSWREarliestAge(kpis.totalWealthAtRetirement, swrFireNumber, retirementAge);
@@ -39,7 +62,8 @@ export function decisionFromState(state, rules) {
       targetAge: retirementAge,
       earliestFireAge,
       shortfall,
-      bindingConstraint: kpis.bindingConstraint,
+      bindingConstraintAtTarget: kpis.bindingConstraint,
+      bindingConstraintAtEarliest,
       kpis,
       
       // Comparison data for DWZ vs SWR strip
@@ -61,7 +85,8 @@ export function decisionFromState(state, rules) {
       targetAge: retirementAge,
       earliestFireAge: null, // SWR mode doesn't calculate earliest FIRE age
       shortfall,
-      bindingConstraint: null, // Only applicable to DWZ mode
+      bindingConstraintAtTarget: null, // Only applicable to DWZ mode
+      bindingConstraintAtEarliest: null,
       kpis,
       
       // No comparison in SWR mode
@@ -93,12 +118,27 @@ function calculateSWREarliestAge(totalWealth, fireNumber, targetAge) {
 }
 
 /**
+ * Get the constraint caption for the earliest FIRE age
+ * @param {string} constraint - 'bridge' or 'post'
+ * @param {number} earliestAge - The earliest FIRE age
+ * @returns {string} Caption explaining the constraint
+ */
+function getEarliestConstraintCaption(constraint, earliestAge) {
+  if (constraint === 'bridge') {
+    return `Earliest is bridge-limited at ${earliestAge}; changing life expectancy won't move it unless outside savings or plan changes.`;
+  } else if (constraint === 'post') {
+    return `Earliest is horizon-limited; shortening life expectancy can bring it earlier.`;
+  }
+  return '';
+}
+
+/**
  * Get display-ready decision summary for UI components
  * @param {Object} decision - Decision object from decisionFromState
  * @returns {Object} Formatted strings and values for display
  */
 export function getDecisionDisplay(decision) {
-  const { mode, canRetireAtTarget, targetAge, earliestFireAge, shortfall, kpis } = decision;
+  const { mode, canRetireAtTarget, targetAge, earliestFireAge, shortfall, kpis, bindingConstraintAtEarliest } = decision;
   
   if (mode === 'DWZ') {
     return {
@@ -116,7 +156,12 @@ export function getDecisionDisplay(decision) {
         
       earliestMessage: earliestFireAge 
         ? `Earliest FIRE: ${earliestFireAge}`
-        : 'Earliest FIRE: Not achievable'
+        : 'Earliest FIRE: Not achievable',
+        
+      // Add constraint caption for earliest FIRE age
+      earliestConstraintCaption: earliestFireAge && bindingConstraintAtEarliest 
+        ? getEarliestConstraintCaption(bindingConstraintAtEarliest, earliestFireAge)
+        : null
     };
   } else {
     return {

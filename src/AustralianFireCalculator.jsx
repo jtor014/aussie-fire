@@ -2091,6 +2091,11 @@ const AustralianFireCalculator = () => {
                           </span>
                         }
                       </div>
+                      {decisionDisplay.earliestConstraintCaption && (
+                        <div style={{fontSize:11, color:'#6b7280', marginTop:4, lineHeight:'1.3'}}>
+                          {decisionDisplay.earliestConstraintCaption}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
