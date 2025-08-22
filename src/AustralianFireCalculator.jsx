@@ -302,7 +302,7 @@ const AustralianFireCalculator = () => {
   const [annualIncome, setAnnualIncome] = useState(DEFAULTS.income);
   const [annualExpenses, setAnnualExpenses] = useState(DEFAULTS.expensesSingle);
   const [currentSuper, setCurrentSuper] = useState(DEFAULTS.superStart);
-  // DWZ is always enabled now (T-010)
+  const [dieWithZeroMode, setDieWithZeroMode] = useState(false); // T-010: DWZ can still be toggled off if needed
   const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULTS.longevity);
   const [bequest, setBequest] = useState(0);
   
