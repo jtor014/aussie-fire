@@ -38,7 +38,7 @@ export function kpisFromState(state, rules) {
     // Investment assumptions
     expectedReturn = 8.5,
     investmentFees = 0.5,
-    safeWithdrawalRate = 4.0,
+    // safeWithdrawalRate removed in DWZ-only mode
     inflationRate = 2.5,
     adjustForInflation = true,
     
@@ -82,8 +82,8 @@ export function kpisFromState(state, rules) {
   const netReturn = realReturn - (investmentFees / 100);
   const returnRate = netReturn;
   
-  // === FIRE Number ===
-  const fireNumber = Money.toNumber(Money.mul(annualExpenses, 100 / safeWithdrawalRate));
+  // === FIRE Number removed in DWZ-only mode ===
+  // DWZ uses sustainable spending instead of fixed withdrawal rate
   
   // === Wealth Projections ===
   let totalWealthAtRetirement = 0;
@@ -120,8 +120,11 @@ export function kpisFromState(state, rules) {
   }
   
   // === Status vs Plan ===
-  const statusVsPlan = totalWealthAtRetirement >= fireNumber ? 'On Track' : 'Behind';
-  const shortfall = Math.max(0, fireNumber - totalWealthAtRetirement);
+  // Status based on expenses coverage in DWZ-only mode
+  const annualNeed = Money.toNumber(annualExpenses);
+  const estimatedSustainableSpend = Math.min(totalWealthAtRetirement * 0.04, annualNeed); // Simple estimate
+  const statusVsPlan = estimatedSustainableSpend >= annualNeed ? 'On Track' : 'Behind';
+  const shortfall = Math.max(0, annualNeed - estimatedSustainableSpend);
   
   // === Die With Zero Calculations ===
   let sustainableSpend = annualExpenses;
@@ -209,7 +212,7 @@ export function kpisFromState(state, rules) {
     totalInsurancePremiums,
     
     // FIRE metrics
-    fireNumber,
+    // fireNumber removed in DWZ-only mode
     totalWealthAtRetirement,
     statusVsPlan,
     shortfall,
@@ -241,7 +244,7 @@ export function extractDisplayKpis(kpis) {
     sustainableSpend: Money.formatAUD(kpis.sustainableSpend),
     statusVsPlan: kpis.statusVsPlan,
     earliestFireAge: kpis.earliestFireAge,
-    fireNumber: Money.formatAUD(kpis.fireNumber),
+    // fireNumber removed in DWZ-only mode
     totalWealthAtRetirement: Money.formatAUD(kpis.totalWealthAtRetirement),
     shortfall: Money.formatAUD(kpis.shortfall),
     savingsRate: `${kpis.savingsRate.toFixed(1)}%`,
