@@ -1,5 +1,5 @@
 import rulesDefault from "../data/au_rules.json";
-import { calcIncomeTax, getMarginalRate } from "./tax";
+import { calcIncomeTax } from "./tax";  // getMarginalRate unused but may be needed later
 import { calcSuperContribs } from "./super";
 import { assessBridge } from "./bridge";
 import { getPreservationAge } from "./preservation";

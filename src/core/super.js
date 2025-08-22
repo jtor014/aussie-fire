@@ -1,4 +1,5 @@
 import rulesDefault from "../data/au_rules.json";
+import * as Money from "../lib/money.js";
 
 /** SG + extra contributions; returns totals and cap flags */
 export function calcSuperContribs(
@@ -7,18 +8,18 @@ export function calcSuperContribs(
   insurancePremiums = 0,
   rules = rulesDefault
 ) {
-  const employer = Math.min(income, rules.sg_max_base) * 0.12;
-  const total = employer + extra;
-  const net = Math.max(0, total - insurancePremiums);
-  const cap = rules.concessional_cap;
+  const employer = Money.mul(Money.min(income, rules.sg_max_base), 0.12);
+  const total = Money.add(employer, extra);
+  const net = Money.max(0, Money.sub(total, insurancePremiums));
+  const cap = Money.money(rules.concessional_cap);
 
   return {
-    employer,
+    employer: Money.toNumber(employer),
     additional: extra,
-    total,
-    net,
-    remainingCap: Math.max(0, cap - total),
-    isOverCap: total > cap,
-    cap
+    total: Money.toNumber(total),
+    net: Money.toNumber(net),
+    remainingCap: Money.toNumber(Money.max(0, Money.sub(cap, total))),
+    isOverCap: Money.toNumber(total) > rules.concessional_cap,
+    cap: rules.concessional_cap
   };
 }

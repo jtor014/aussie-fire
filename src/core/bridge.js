@@ -1,3 +1,5 @@
+import * as Money from "../lib/money.js";
+
 /**
  * Assess whether outside-super funds can cover the years between
  * retirement and preservation age (default 60).
@@ -35,23 +37,29 @@ export function assessBridge({
       : Math.max(0, preservationAge - currentAge);
 
   // What we need to spend each year during the bridge
-  const annualNeed = Math.max(
+  const annualNeed = Money.toNumber(Money.max(
     0,
-    dieWithZero ? Math.min(annualExpenseNeed, spendToZeroAnnual || Infinity) : annualExpenseNeed
-  );
+    dieWithZero ? Money.min(annualExpenseNeed, spendToZeroAnnual || Infinity) : Money.money(annualExpenseNeed)
+  ));
 
   // Funds available outside super at the START of the bridge
   let fundsAvailable;
   if (yearsToRetirement > 0) {
     // FV of existing outside-super + savings stream until retirement
     if (returnRate !== 0) {
-      fundsAvailable =
-        currentOutsideSuper * Math.pow(1 + returnRate, yearsToRetirement) +
-        Math.max(0, annualOutsideSavings) *
-          ((Math.pow(1 + returnRate, yearsToRetirement) - 1) / returnRate);
+      const fvCurrent = Money.mul(currentOutsideSuper, Money.pow(1 + returnRate, yearsToRetirement));
+      const fvSavings = Money.mul(
+        Money.max(0, annualOutsideSavings),
+        Money.div(
+          Money.sub(Money.pow(1 + returnRate, yearsToRetirement), 1),
+          returnRate
+        )
+      );
+      fundsAvailable = Money.toNumber(Money.add(fvCurrent, fvSavings));
     } else {
-      fundsAvailable =
-        currentOutsideSuper + Math.max(0, annualOutsideSavings) * yearsToRetirement;
+      fundsAvailable = Money.toNumber(
+        Money.add(currentOutsideSuper, Money.mul(Money.max(0, annualOutsideSavings), yearsToRetirement))
+      );
     }
   } else {
     // Already retired: use current outside-super as the starting pot
@@ -61,12 +69,16 @@ export function assessBridge({
   // Present value at the START of the bridge of an n-year spend stream
   let fundsNeeded;
   if (returnRate !== 0) {
-    fundsNeeded = annualNeed * (1 - Math.pow(1 + returnRate, -bridgeYears)) / returnRate;
+    const pvFactor = Money.div(
+      Money.sub(1, Money.pow(1 + returnRate, -bridgeYears)),
+      returnRate
+    );
+    fundsNeeded = Money.toNumber(Money.mul(annualNeed, pvFactor));
   } else {
-    fundsNeeded = annualNeed * bridgeYears;
+    fundsNeeded = Money.toNumber(Money.mul(annualNeed, bridgeYears));
   }
 
-  const shortfall = Math.max(0, fundsNeeded - fundsAvailable);
+  const shortfall = Money.toNumber(Money.max(0, Money.sub(fundsNeeded, fundsAvailable)));
 
   return {
     needsBridge: true,

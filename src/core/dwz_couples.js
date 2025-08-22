@@ -1,5 +1,6 @@
 import { real, pmt, fv, remain } from "./dwz_math.js";
 import { calcSuperContribs } from "./super.js";
+import * as Money from "../lib/money.js";
 
 export function dwzPersonFromState(person, assumptions, rules) {
   const rOut = real(assumptions.nominalReturnOutside, assumptions.inflation);
@@ -57,13 +58,15 @@ export function maxSpendDWZCouple(pA, pB, R, Lh) {
     if (bothLocked) {
       W = Math.min(W, pmt(out, pA.rRetOut, n1));
       out = remain(out, W, pA.rRetOut, n1);
-      supA *= Math.pow(1 + pA.rRetSup, n1); supB *= Math.pow(1 + pB.rRetSup, n1);
+      supA = Money.toNumber(Money.mul(supA, Money.pow(Money.add(1, pA.rRetSup), n1)));
+      supB = Money.toNumber(Money.mul(supB, Money.pow(Money.add(1, pB.rRetSup), n1)));
     } else {
       const pool = out + unlocked;
       W = Math.min(W, pmt(pool, blended(pA, pB), n1));
       out = remain(pool, W, blended(pA, pB), n1);
       unlocked = 0;
-      supA *= Math.pow(1 + pA.rRetSup, n1); supB *= Math.pow(1 + pB.rRetSup, n1);
+      supA = Money.toNumber(Money.mul(supA, Money.pow(Money.add(1, pA.rRetSup), n1)));
+      supB = Money.toNumber(Money.mul(supB, Money.pow(Money.add(1, pB.rRetSup), n1)));
     }
   }
   if (t1 === pA.P && supA > 0) { unlocked += supA; supA = 0; }
@@ -75,8 +78,8 @@ export function maxSpendDWZCouple(pA, pB, R, Lh) {
     const pool = out + unlocked;
     W = Math.min(W, pmt(pool, blended(pA, pB), n2));
     out = remain(pool, W, blended(pA, pB), n2);
-    if (supA > 0) supA *= Math.pow(1 + pA.rRetSup, n2);
-    if (supB > 0) supB *= Math.pow(1 + pB.rRetSup, n2);
+    if (supA > 0) supA = Money.toNumber(Money.mul(supA, Money.pow(Money.add(1, pA.rRetSup), n2)));
+    if (supB > 0) supB = Money.toNumber(Money.mul(supB, Money.pow(Money.add(1, pB.rRetSup), n2)));
   }
   if (t2 === pA.P && supA > 0) { unlocked += supA; supA = 0; }
   if (t2 === pB.P && supB > 0) { unlocked += supB; supB = 0; }
