@@ -1,4 +1,4 @@
-import { real, pmt, fv, EPS } from "./dwz_math.js";  // eslint-disable-line no-unused-vars
+import { real, pmt, fv, EPS, annuityFactor } from "./dwz_math.js";  // eslint-disable-line no-unused-vars
 import { calcSuperContribs } from "./super.js";
 import * as Money from "../lib/money.js";
 
@@ -27,88 +27,69 @@ export function getAtRetirementBalances(p, R) {
 }
 
 export function maxSpendDWZSingleWithConstraint(p, R, L) {
-  R = Math.max(R, p.A); const T = Math.max(L ?? p.L, R + 1);
+  R = Math.max(R, p.A); 
+  const lifeExp = Math.max(L ?? p.L, R + 1);
   
-  // Get at-retirement balances
+  // Get at-retirement balances (in real dollars)
   const n0 = Math.max(0, R - p.A);
-  const outAtR = fv(p.Bout, p.c_out, p.rWorkOut, n0);
-  const supAtR = fv(p.Bsup, p.c_sup, p.rWorkSup, n0);
+  const W_out = Money.money(fv(p.Bout, p.c_out, p.rWorkOut, n0));
+  const W_sup = Money.money(fv(p.Bsup, p.c_sup, p.rWorkSup, n0));
   
-  const n1 = Math.max(0, Math.min(T - R, p.P - R));  // pre-preserve years
-  const n2 = Math.max(0, T - Math.max(R, p.P));      // post-preserve years
-  const rO = p.rRetOut, rS = p.rRetSup;
-
-  // Special case: if R >= P, no bridge constraint, just use combined pool
+  // Calculate periods using the formula from ticket
+  const n_b = Math.max(0, p.P - R);  // bridge years: max(0, P - R)
+  const n_p = Math.max(0, lifeExp - p.P);  // post-preservation years: L - P
+  const r_real = p.rRetOut;  // real return rate already calculated
+  
+  // Case 1: R >= P (no bridge period needed)
   if (R >= p.P) {
-    const totAtR = outAtR + supAtR;
+    const totalWealth = Money.add(W_out, W_sup);
+    const retirementYears = lifeExp - R;
+    const annuity = annuityFactor(retirementYears, r_real);
+    
     return {
-      spend: pmt(totAtR, rO, T - R),
-      constraint: 'post'  // Only post-preservation constraint applies
+      spend: Money.toNumber(Money.div(totalWealth, annuity)),
+      constraint: 'post'
     };
   }
-
-  // Bridge case: R < P, must respect outside-only constraint
-  // Use the min of two constraints: bridge period + post-preservation period
   
-  // Constraint 1: Bridge period (outside only)
-  const bridgeConstraint = pmt(outAtR, rO, n1);
+  // Case 2: R < P (bridge period exists)
+  // Calculate bridge constraint: S_bridge = W_out / a(n_b, r_real)
+  let S_bridge = Infinity;
+  if (n_b > 0) {
+    const bridgeAnnuity = annuityFactor(n_b, r_real);
+    S_bridge = Money.toNumber(Money.div(W_out, bridgeAnnuity));
+  }
   
-  // Constraint 2: If there's a post-preservation period, check if that's tighter
-  if (n2 > 0) {
-    // What's left in outside after bridge period at this spend rate
-    const remain = (W) => Money.toNumber(
-      Money.sub(
-        Money.mul(outAtR, Money.pow(Money.add(1, rO), n1)),
-        Money.mul(W, Money.div(Money.sub(Money.pow(Money.add(1, rO), n1), 1), rO))
-      )
-    );
-    // Super grows during bridge period
-    const supAtP = Money.toNumber(Money.mul(supAtR, Money.pow(Money.add(1, rS), n1)));
+  // Calculate post-preservation constraint if post-preservation period exists
+  let S_post = Infinity;
+  if (n_p > 0) {
+    // W_P = (W_out + W_sup) * (1 + r_real)^(n_b)
+    const totalWealthAtR = Money.add(W_out, W_sup);
+    const growthFactor = Money.pow(Money.add(1, r_real), n_b);
+    const W_P = Money.mul(totalWealthAtR, growthFactor);
     
-    // Binary search to find W where post-preservation constraint is satisfied
-    let lo = 0, hi = bridgeConstraint;
+    // Denominator: a(n_b, r_real) * (1 + r_real)^(n_b) + a(n_p, r_real)
+    const bridgeAnnuity = annuityFactor(n_b, r_real);
+    const postAnnuity = annuityFactor(n_p, r_real);
+    const bridgeTerm = Money.mul(bridgeAnnuity, growthFactor);
+    const denominator = Money.add(bridgeTerm, postAnnuity);
     
-    for (let i = 0; i < 60; i++) {
-      const W = (lo + hi) / 2;
-      const outAtP = remain(W);
-      
-      if (outAtP < -EPS) {
-        // Bridge broke
-        hi = W;
-        continue;
-      }
-      
-      const totAtP = outAtP + supAtP;
-      const end = Money.toNumber(
-        Money.sub(
-          Money.mul(totAtP, Money.pow(Money.add(1, rO), n2)),
-          Money.mul(W, Money.div(Money.sub(Money.pow(Money.add(1, rO), n2), 1), rO))
-        )
-      );
-      
-      if (end < -EPS) {
-        hi = W;
-      } else {
-        lo = W;
-      }
-      
-      if (Math.abs(hi - lo) < EPS) break;
-    }
-    
-    const postConstraint = Math.max(0, lo);
-    
-    // Determine which constraint is binding
-    const constraint = postConstraint < (bridgeConstraint - EPS) ? 'post' : 'bridge';
-    
+    S_post = Money.toNumber(Money.div(W_P, denominator));
+  }
+  
+  // S = min(S_bridge, S_post) and determine which constraint is binding
+  const S_bridge_num = S_bridge === Infinity ? Number.MAX_VALUE : S_bridge;
+  const S_post_num = S_post === Infinity ? Number.MAX_VALUE : S_post;
+  
+  if (S_bridge_num <= S_post_num) {
     return {
-      spend: postConstraint,
-      constraint
+      spend: Math.max(0, S_bridge),
+      constraint: 'bridge'
     };
   } else {
-    // No post-preservation period, just use bridge constraint
     return {
-      spend: Math.max(0, bridgeConstraint),
-      constraint: 'bridge'
+      spend: Math.max(0, S_post),
+      constraint: 'post'
     };
   }
 }
