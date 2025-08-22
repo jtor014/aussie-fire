@@ -1,5 +1,6 @@
 import { kpisFromState } from './kpis.js';
 import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz_single.js';
+import { computeDwzStepped, isSteppedPlanViable, earliestFireAgeSteppedDWZ, getSteppedConstraint } from '../core/dwz_stepped.js';
 
 /**
  * Unified decision selector for Australian FIRE Calculator
@@ -26,9 +27,83 @@ export function decisionFromState(state, rules) {
   
   if (dieWithZeroMode) {
     // === DWZ MODE ===
-    const canRetireAtTarget = kpis.sustainableSpend >= annualExpenses;
-    const earliestFireAge = kpis.earliestFireAge;
-    const shortfall = canRetireAtTarget ? 0 : annualExpenses - kpis.sustainableSpend;
+    // Compute stepped DWZ values if in single mode
+    let steppedDWZ = null;
+    let canRetireAtTarget = false;
+    let shortfall = 0;
+    let earliestFireAge = null;
+    
+    if (state.planningAs === 'single') {
+      // Get wealth at retirement
+      const yearsToRetirement = retirementAge - state.currentAge;
+      let W_out = state.currentSavings || 0;
+      let W_sup = state.currentSuper || 0;
+      
+      if (yearsToRetirement > 0) {
+        const returnRate = kpis.returnRate || 0.05;
+        const growthFactor = Math.pow(1 + returnRate, yearsToRetirement);
+        
+        // Outside wealth growth with savings
+        const annualSavings = kpis.annualSavings || 0;
+        if (Math.abs(returnRate) < 1e-9) {
+          W_out = W_out + annualSavings * yearsToRetirement;
+        } else {
+          W_out = W_out * growthFactor + annualSavings * ((growthFactor - 1) / returnRate);
+        }
+        
+        // Super growth with contributions
+        const superContribs = kpis.superContribs?.net || 0;
+        if (Math.abs(returnRate) < 1e-9) {
+          W_sup = W_sup + superContribs * yearsToRetirement;
+        } else {
+          W_sup = W_sup * growthFactor + superContribs * ((growthFactor - 1) / returnRate);
+        }
+      }
+      
+      // Compute stepped spend
+      const P = rules.preservation_age || 60;
+      const r_real = kpis.returnRate || 0.05;
+      steppedDWZ = computeDwzStepped(retirementAge, P, lifeExpectancy, W_out, W_sup, r_real);
+      
+      // Check viability
+      canRetireAtTarget = isSteppedPlanViable(steppedDWZ, annualExpenses);
+      
+      // Calculate shortfall based on limiting phase
+      const constraint = getSteppedConstraint(steppedDWZ, annualExpenses);
+      if (constraint === 'pre-super') {
+        shortfall = annualExpenses - steppedDWZ.S_pre;
+      } else if (constraint === 'post-super') {
+        shortfall = annualExpenses - steppedDWZ.S_post;
+      } else if (constraint === 'both') {
+        shortfall = Math.max(
+          annualExpenses - steppedDWZ.S_pre,
+          annualExpenses - steppedDWZ.S_post
+        );
+      }
+      
+      // Calculate earliest FIRE age using stepped logic
+      const assumptions = {
+        nominalReturnOutside: state.expectedReturn / 100 || 0.085,
+        nominalReturnSuper: state.expectedReturn / 100 || 0.085,
+        inflation: state.inflationRate / 100 || 0.025
+      };
+      
+      const dwzParams = dwzFromSingleState({
+        currentAge: state.currentAge,
+        longevity: lifeExpectancy,
+        liquidStart: state.currentSavings || 0,
+        superStart: state.currentSuper || 0,
+        income: state.annualIncome || 0,
+        extraSuper: state.additionalSuperContributions || 0
+      }, assumptions, rules);
+      
+      earliestFireAge = earliestFireAgeSteppedDWZ(dwzParams, annualExpenses, lifeExpectancy);
+    } else {
+      // Fallback to original calculation for non-single mode
+      canRetireAtTarget = kpis.sustainableSpend >= annualExpenses;
+      earliestFireAge = kpis.earliestFireAge;
+      shortfall = canRetireAtTarget ? 0 : annualExpenses - kpis.sustainableSpend;
+    }
     
     // Calculate binding constraint at earliest FIRE age
     let bindingConstraintAtEarliest = null;
@@ -65,6 +140,15 @@ export function decisionFromState(state, rules) {
       bindingConstraintAtTarget: kpis.bindingConstraint,
       bindingConstraintAtEarliest,
       kpis,
+      
+      // Stepped DWZ values
+      dwz: steppedDWZ ? {
+        S_pre: steppedDWZ.S_pre,
+        S_post: steppedDWZ.S_post,
+        constraint: getSteppedConstraint(steppedDWZ, annualExpenses),
+        n_b: steppedDWZ.n_b,
+        n_p: steppedDWZ.n_p
+      } : null,
       
       // Comparison data for DWZ vs SWR strip
       comparison: {
@@ -138,17 +222,45 @@ function getEarliestConstraintCaption(constraint, earliestAge) {
  * @returns {Object} Formatted strings and values for display
  */
 export function getDecisionDisplay(decision) {
-  const { mode, canRetireAtTarget, targetAge, earliestFireAge, shortfall, kpis, bindingConstraintAtEarliest } = decision;
+  const { mode, canRetireAtTarget, targetAge, earliestFireAge, shortfall, kpis, bindingConstraintAtEarliest, dwz } = decision;
   
   if (mode === 'DWZ') {
+    // Format sustainable spend based on stepped or flat DWZ
+    let sustainableSpendDisplay;
+    let statusDetail = null;
+    
+    if (dwz && dwz.n_b > 0) {
+      // Stepped DWZ with bridge period
+      const preFmt = Math.round(dwz.S_pre).toLocaleString();
+      const postFmt = Math.round(dwz.S_post).toLocaleString();
+      sustainableSpendDisplay = `$${preFmt} / $${postFmt} per year`;
+      
+      // Add phase-specific status
+      if (dwz.constraint === 'pre-super') {
+        statusDetail = 'Shortfall pre-super';
+      } else if (dwz.constraint === 'post-super') {
+        statusDetail = 'Shortfall post-super';
+      } else if (dwz.constraint === 'both') {
+        statusDetail = 'Shortfall both phases';
+      }
+    } else if (dwz && dwz.n_b === 0) {
+      // No bridge period, single spend value
+      sustainableSpendDisplay = `$${Math.round(dwz.S_post).toLocaleString()}/yr`;
+    } else {
+      // Fallback to original display
+      sustainableSpendDisplay = `$${Math.round(kpis.sustainableSpend).toLocaleString()}/yr`;
+    }
+    
     return {
       primaryMessage: canRetireAtTarget 
         ? `Can retire at ${targetAge} with DWZ`
         : `Cannot retire at ${targetAge} with DWZ`,
       
-      sustainableSpend: `$${Math.round(kpis.sustainableSpend).toLocaleString()}/yr`,
+      sustainableSpend: sustainableSpendDisplay,
       
       status: canRetireAtTarget ? 'success' : 'warning',
+      
+      statusDetail,
       
       shortfallMessage: shortfall > 0 
         ? `Shortfall: $${Math.round(shortfall).toLocaleString()}/yr`
@@ -161,6 +273,11 @@ export function getDecisionDisplay(decision) {
       // Add constraint caption for earliest FIRE age
       earliestConstraintCaption: earliestFireAge && bindingConstraintAtEarliest 
         ? getEarliestConstraintCaption(bindingConstraintAtEarliest, earliestFireAge)
+        : null,
+        
+      // Add stepped mode indicator
+      steppedModeCaption: dwz && dwz.n_b > 0
+        ? 'DWZ uses a stepped spend: outside-only before preservation, higher after super unlocks.'
         : null
     };
   } else {

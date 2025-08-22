@@ -2065,7 +2065,7 @@ const AustralianFireCalculator = () => {
                   <div>
                     <div style={{fontSize:13, color:'#4b5563'}}>Sustainable spend (real)</div>
                     <div style={{fontSize:20, fontWeight:700}}>
-                      ${Math.round(kpis.sustainableSpend).toLocaleString()}/yr
+                      {decisionDisplay.sustainableSpend || `$${Math.round(kpis.sustainableSpend).toLocaleString()}/yr`}
                     </div>
                   </div>
                   <div>
@@ -2076,8 +2076,8 @@ const AustralianFireCalculator = () => {
                   </div>
                   <div>
                     <div style={{fontSize:13, color:'#4b5563'}}>Status vs plan</div>
-                    <div style={{fontSize:20, fontWeight:700, color: kpis.sustainableSpend >= annualExpenses ? '#059669' : '#dc2626'}}>
-                      {kpis.sustainableSpend >= annualExpenses ? 'OK' : 'Shortfall'}
+                    <div style={{fontSize:20, fontWeight:700, color: decisionDisplay.status === 'success' ? '#059669' : '#dc2626'}}>
+                      {decisionDisplay.statusDetail || (decisionDisplay.status === 'success' ? 'OK' : 'Shortfall')}
                     </div>
                   </div>
                   {kpis.earliestFireAge != null && (
@@ -2101,6 +2101,11 @@ const AustralianFireCalculator = () => {
                 </div>
                 <div style={{marginTop:8, fontSize:12, color:'#6b7280'}}>
                   Real (today's) dollars. Outside money covers the bridge until super unlocks at preservation age. Life expectancy set to {lifeExpectancy}.
+                  {decisionDisplay.steppedModeCaption && (
+                    <div style={{marginTop:4}}>
+                      {decisionDisplay.steppedModeCaption}
+                    </div>
+                  )}
                 </div>
                 {/* Constraint explanation */}
                 {planningAs === 'single' && kpis.bindingConstraint && (
