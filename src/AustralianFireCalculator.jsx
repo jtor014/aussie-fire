@@ -13,6 +13,7 @@ import { mkPartner, mkHousehold } from './models/shapes';
 import { projectCouple } from './core/household';
 import { dwzFromSingleState, maxSpendDWZSingle, earliestFireAgeDWZSingle, getAtRetirementBalances } from './core/dwz_single.js';
 import { dwzPersonFromState, maxSpendDWZCouple, earliestFireAgeDWZCouple, getCoupleAtRetirementBalances } from './core/dwz_couples.js';
+import { GlobalBanner } from './components/GlobalBanner.jsx';
 
 // === DWZ helpers (real dollars) ===
 const EPS = 1e-6;
@@ -301,7 +302,7 @@ const AustralianFireCalculator = () => {
   const [annualIncome, setAnnualIncome] = useState(DEFAULTS.income);
   const [annualExpenses, setAnnualExpenses] = useState(DEFAULTS.expensesSingle);
   const [currentSuper, setCurrentSuper] = useState(DEFAULTS.superStart);
-  const [dieWithZeroMode, setDieWithZeroMode] = useState(false);
+  // DWZ is always enabled now (T-010)
   const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULTS.longevity);
   const [bequest, setBequest] = useState(0);
   
@@ -319,10 +320,7 @@ const AustralianFireCalculator = () => {
   const [investmentFees, setInvestmentFees] = useState(0.5);
   const [adjustForInflation, setAdjustForInflation] = useState(true);
   
-  // Legacy variables for backward compatibility (not used in DWZ-only mode)
-  const safeWithdrawalRate = 3.5;
-  const fireMultiplier = 100 / safeWithdrawalRate;
-  const fireNumber = annualExpenses * fireMultiplier;
+  // DWZ-only mode (T-010) - SWR removed
   const [inflationRate, setInflationRate] = useState(2.5);
   const [showInTodaysDollars, setShowInTodaysDollars] = useState(true);
   const [hecsDebt, setHecsDebt] = useState(0);
@@ -335,11 +333,7 @@ const AustralianFireCalculator = () => {
   const [dwzPlanningMode, setDwzPlanningMode] = useState('earliest'); // 'earliest' | 'pinned'
   const [pinnedRetirementAge, setPinnedRetirementAge] = useState(retirementAge);
 
-  // DWZ Feature flags (Phase 0 - safe switches)
-  const [flags] = useState({
-    dwzEnabled: true,           // flip off if anything feels risky
-    dwzShowEarliestFire: true,  // UI gate for earliest FIRE output
-  });
+  // DWZ is always enabled (T-010 - removed toggle)
 
   // Partner B (using same defaults as Person A - Phase 4)
   const [partnerB, setPartnerB] = useState({
@@ -428,7 +422,8 @@ const AustralianFireCalculator = () => {
         setAnnualIncome(settings.annualIncome || 100000);
         setAnnualExpenses(settings.annualExpenses || 40000);
         setCurrentSuper(settings.currentSuper || 100000);
-        setDieWithZeroMode(settings.dieWithZeroMode || false);
+        // T-010: Migration shim - dwzEnabled always true, but respect dieWithZeroMode setting
+        setDieWithZeroMode(settings.dieWithZeroMode || settings.dwzEnabled || false);
         setLifeExpectancy(settings.lifeExpectancy || 90);
         setExpectedReturn(settings.expectedReturn || 8.5);
         setInvestmentFees(settings.investmentFees || 0.5);
@@ -522,7 +517,8 @@ const AustralianFireCalculator = () => {
       setAnnualIncome(parseFloat(urlParams.get('income')) || 100000);
       setAnnualExpenses(parseFloat(urlParams.get('expenses')) || 65000);
       setCurrentSuper(parseFloat(urlParams.get('super')) || 100000);
-      setDieWithZeroMode(urlParams.get('dzm') === '1');
+      // T-010: Migration shim - check both dzm and legacy dwzEnabled params
+      setDieWithZeroMode(urlParams.get('dzm') === '1' || urlParams.get('dwzEnabled') === '1');
       setLifeExpectancy(parseInt(urlParams.get('life')) || 90);
       setExpectedReturn(parseFloat(urlParams.get('return')) || 8.5);
       setInvestmentFees(parseFloat(urlParams.get('fees')) || 0.5);
@@ -593,9 +589,8 @@ const AustralianFireCalculator = () => {
       const W = maxSpendDWZCouple(pA, pB, retirementAge, Lh);
       
       let earliest = null;
-      if (flags.dwzShowEarliestFire) {
-        earliest = earliestFireAgeDWZCouple(pA, pB, annualExpenses, Lh);
-      }
+      // DWZ always enabled - show earliest FIRE output
+      earliest = earliestFireAgeDWZCouple(pA, pB, annualExpenses, Lh);
 
       // Return structure that matches chart expectations
       return { 
@@ -643,7 +638,7 @@ const AustralianFireCalculator = () => {
 
       // earliest FIRE age (binary search)
       let earliest = null;
-      if (flags.dwzShowEarliestFire) {
+      // DWZ always enabled - show earliest FIRE output
         let lo = currentAge + 1;
         let hi = Math.min(L - 1, 75);  // reasonable upper bound
         while (lo <= hi) {
@@ -667,7 +662,7 @@ const AustralianFireCalculator = () => {
     }
     // eslint-disable-next-line
   }, [
-    dieWithZeroMode, flags.dwzEnabled, planningAs,
+    dieWithZeroMode, true, planningAs,
     // inputs:
     currentAge, retirementAge, lifeExpectancy,
     currentSavings, currentSuper,
@@ -808,19 +803,20 @@ const AustralianFireCalculator = () => {
     
     // Update retirement feasibility based on bridge period
     // Use DWZ W when DWZ mode is enabled and available, otherwise use KPI sustainable spend
-    const dwzSustainableSpend = (flags.dwzEnabled && dwzOutputs?.W) ? dwzOutputs.W : kpis.sustainableSpend;
-    const effectiveWithdrawal = dieWithZeroMode ? dwzSustainableSpend : kpis.totalWealthAtRetirement * (safeWithdrawalRate / 100);
+    const dwzSustainableSpend = (dwzOutputs?.W) ? dwzOutputs.W : kpis.sustainableSpend;
+    // DWZ-only calculations (T-010)
+    const effectiveWithdrawal = dwzSustainableSpend;
     const basicRetirementFeasible = effectiveWithdrawal >= annualExpenses;
     const canRetire = basicRetirementFeasible && kpis.bridgeAssessment.feasible;
     
-    // Calculate total shortfall (basic retirement + bridge period)
-    const basicShortfall = basicRetirementFeasible ? 0 : (annualExpenses - effectiveWithdrawal) / (safeWithdrawalRate / 100);
-    const totalShortfall = basicShortfall + kpis.bridgeAssessment.shortfall;
+    // Calculate shortfall based on DWZ sustainable spending
+    const basicShortfall = basicRetirementFeasible ? 0 : (annualExpenses - effectiveWithdrawal);
+    const totalShortfall = kpis.bridgeAssessment.shortfall; // Bridge assessment handles its own shortfall
 
     return {
       savingsRate: kpis.savingsRate,
       totalWealth: kpis.totalWealthAtRetirement,
-      withdrawalAmount: kpis.totalWealthAtRetirement * (safeWithdrawalRate / 100),
+      withdrawalAmount: dwzSustainableSpend, // DWZ-only mode
       spendToZeroAmount: dwzSustainableSpend,
       effectiveWithdrawal,
       canRetire,
@@ -852,7 +848,7 @@ const AustralianFireCalculator = () => {
       remainingCap: kpis.superContribs.remainingCap,
       isOverCap: kpis.superContribs.isOverCap
     };
-  }, [kpis, showInTodaysDollars, safeWithdrawalRate, flags.dwzEnabled, dwzOutputs?.W, annualIncome, annualExpenses, additionalSuperContributions]);
+  }, [kpis, showInTodaysDollars, dwzOutputs?.W, annualIncome, annualExpenses, additionalSuperContributions]);
 
   const coupleProjection = useMemo(() => {
     if (planningAs !== 'couple') return null;
@@ -882,7 +878,7 @@ const AustralianFireCalculator = () => {
 
     const assumptions = {
       returnRate: showInTodaysDollars ? realReturn : netReturn,
-      swr: safeWithdrawalRate,
+      // SWR removed in DWZ-only mode (T-010)
       showInTodaysDollars
     };
 
@@ -891,14 +887,14 @@ const AustralianFireCalculator = () => {
     planningAs, currentAge, retirementAge, annualIncome, additionalSuperContributions,
     currentSavings, currentSuper, hasPrivateHealth, hecsDebt,
     partnerB, annualExpenses, dieWithZeroMode, lifeExpectancy,
-    showInTodaysDollars, realReturn, netReturn, safeWithdrawalRate
+    showInTodaysDollars, realReturn, netReturn
   ]);
 
   // DWZ calculations (Phase 2) - new robust version
 
   // Derived FIRE ages (DWZ takes precedence when enabled)
   const dwzEarliestAge =
-    dieWithZeroMode && flags.dwzEnabled && dwzOutputs?.earliest != null
+    dieWithZeroMode && dwzOutputs?.earliest != null
       ? dwzOutputs.earliest
       : null;
 
@@ -1062,7 +1058,7 @@ const AustralianFireCalculator = () => {
           <p style={{ margin: '0 0 8px 0', fontWeight: '600' }}>{`Age: ${label}`}</p>
           {payload.map((entry, index) => {
             const label = 
-              dieWithZeroMode && flags.dwzEnabled
+              dieWithZeroMode
                 ? (entry.name === 'totalWealth' ? 'DWZ total (real)' : entry.name)
                 : entry.name;
             return (
@@ -1088,6 +1084,8 @@ const AustralianFireCalculator = () => {
     <div style={cardStyle}>
       <h1 style={titleStyle}>🇦🇺 Australian FIRE Calculator</h1>
       
+      {/* Global DWZ Results Banner */}
+      <GlobalBanner decision={decision} dwzPlanningMode={dwzPlanningMode} />
 
 
       {/* Your Situation - PayCalculator Style */}
@@ -1922,28 +1920,18 @@ const AustralianFireCalculator = () => {
         )}
       </div>
 
-      {/* Die with Zero Mode */}
+      {/* DWZ Settings - always enabled (T-010) */}
       <div style={{ ...sectionStyle, border: '2px solid #8b5cf6', backgroundColor: '#f3f4f6' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
           <label style={{ ...labelStyle, margin: 0, flex: 1 }}>
-            <span style={{ fontSize: '16px', fontWeight: '700' }}>Die with Zero mode 💀</span>
+            <span style={{ fontSize: '16px', fontWeight: '700' }}>Die with Zero Settings 💀</span>
             <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}>
               Spend it all - you can't take it with you!
             </div>
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={dieWithZeroMode}
-              onChange={(e) => setDieWithZeroMode(e.target.checked)}
-              style={{ marginRight: '8px' }}
-            />
-            <span style={{ fontSize: '14px', fontWeight: '600' }}>Enable</span>
-          </label>
         </div>
         
-        {dieWithZeroMode && (
-          <>
+        {/* DWZ settings are now always visible */}
             <div style={inputGroupStyle}>
               <label style={labelStyle}>Life expectancy (DWZ horizon): {lifeExpectancy}</label>
               <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
@@ -2187,8 +2175,6 @@ const AustralianFireCalculator = () => {
                 )}
               </div>
             )}
-          </>
-        )}
         
         {/* DWZ vs SWR Comparison Strip removed - DWZ-only mode */}
       </div>
@@ -2215,8 +2201,8 @@ const AustralianFireCalculator = () => {
                     <div style={{ fontSize: 13, color: '#6b7280' }}>Wealth at earliest retirement</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 32, fontWeight: 700, color: '#6366f1' }}>{safeWithdrawalRate}%</div>
-                    <div style={{ fontSize: 13, color: '#6b7280' }}>SWR used</div>
+                    <div style={{ fontSize: 32, fontWeight: 700, color: '#6366f1' }}>{formatCurrency(decision.kpis?.planSpend || 0)}</div>
+                    <div style={{ fontSize: 13, color: '#6b7280' }}>DWZ sustainable spend/yr</div>
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 32, fontWeight: 700, color: '#8b5cf6' }}>{lifeExpectancy - Math.min(currentAge, partnerB.currentAge)}</div>
@@ -2336,7 +2322,7 @@ const AustralianFireCalculator = () => {
               textAlign: 'center',
               marginTop: '16px'
             }}>
-              {(calculations.netReturn * 100).toFixed(1)}% returns • {safeWithdrawalRate}% withdrawal
+              {(calculations.netReturn * 100).toFixed(1)}% returns (DWZ mode)
               {adjustForInflation && ` • ${inflationRate}% inflation`}
             </div>
           </div>
@@ -2407,18 +2393,24 @@ const AustralianFireCalculator = () => {
             />
             <Tooltip content={<CustomTooltip />} />
 
-            <ReferenceLine 
-              x={retirementAge} 
-              stroke="#6b7280" 
-              strokeDasharray="5 5"
-              label={{ value: `Retirement: ${retirementAge}`, position: "top" }}
-            />
-            {decision.earliestFireAge != null && (
-              <ReferenceLine
-                x={decision.earliestFireAge}
-                stroke="#059669"
-                strokeDasharray="4 3"
-                label={{ value: 'Earliest FIRE (DWZ)', position: 'top', fill: '#059669', fontSize: 12 }}
+            {/* Chart markers based on planning mode (T-010) */}
+            {dwzPlanningMode === 'earliest' ? (
+              // Earliest mode: show marker for earliest FIRE age if available
+              decision.earliestFireAge != null && (
+                <ReferenceLine
+                  x={decision.earliestFireAge}
+                  stroke="#059669"
+                  strokeDasharray="4 3"
+                  label={{ value: `Earliest FIRE: ${decision.earliestFireAge}`, position: 'top', fill: '#059669', fontSize: 12 }}
+                />
+              )
+            ) : (
+              // Pinned mode: show marker for target retirement age
+              <ReferenceLine 
+                x={decision.targetAge || retirementAge} 
+                stroke="#6b7280" 
+                strokeDasharray="5 5"
+                label={{ value: `Target: ${decision.targetAge || retirementAge}`, position: "top" }}
               />
             )}
             {depletionData?.markers?.map((marker, index) => (
