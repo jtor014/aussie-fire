@@ -17,7 +17,9 @@ export function decisionFromState(state, rules) {
     retirementAge,
     annualExpenses,
     lifeExpectancy,
-    bequest = 0
+    bequest = 0,
+    dwzPlanningMode = 'earliest',
+    pinnedRetirementAge
   } = state;
 
   // Calculate real return rate
@@ -96,15 +98,61 @@ export function decisionFromState(state, rules) {
   
   earliestFireAge = earliestFireAgeSteppedDWZ(dwzParams, annualExpenses, lifeExpectancy, bequest);
 
+  // Determine target age based on planning mode
+  const targetAge = dwzPlanningMode === 'earliest' 
+    ? earliestFireAge || retirementAge  // Use earliest if available, fallback to current age
+    : (pinnedRetirementAge || retirementAge); // Use pinned age or fallback to legacy retirementAge
+
+  // For earliest mode, recalculate viability at the earliest age
+  let finalCanRetireAtTarget = canRetireAtTarget;
+  let finalSteppedDWZ = steppedDWZ;
+  
+  if (dwzPlanningMode === 'earliest' && earliestFireAge && earliestFireAge !== retirementAge) {
+    // Recalculate for the earliest age
+    const earliestYearsToRetirement = earliestFireAge - state.currentAge;
+    let earliestW_out = state.currentSavings || 0;
+    let earliestW_sup = state.currentSuper || 0;
+    
+    if (earliestYearsToRetirement > 0) {
+      const growthFactor = Math.pow(1 + realReturn, earliestYearsToRetirement);
+      
+      // Outside wealth growth
+      const netIncome = state.annualIncome || 0;
+      const netExpenses = state.annualExpenses || 0;
+      const taxRate = 0.325;
+      const annualSavings = Math.max(0, netIncome * (1 - taxRate) - netExpenses);
+      
+      if (Math.abs(realReturn) < 1e-9) {
+        earliestW_out = earliestW_out + annualSavings * earliestYearsToRetirement;
+      } else {
+        earliestW_out = earliestW_out * growthFactor + annualSavings * ((growthFactor - 1) / realReturn);
+      }
+      
+      // Super growth
+      const superContribRate = 0.115;
+      const superContribs = (state.annualIncome || 0) * superContribRate + (state.additionalSuperContributions || 0);
+      
+      if (Math.abs(realReturn) < 1e-9) {
+        earliestW_sup = earliestW_sup + superContribs * earliestYearsToRetirement;
+      } else {
+        earliestW_sup = earliestW_sup * growthFactor + superContribs * ((growthFactor - 1) / realReturn);
+      }
+    }
+    
+    finalSteppedDWZ = computeDwzStepped(earliestFireAge, P, lifeExpectancy, earliestW_out, earliestW_sup, realReturn, bequest);
+    finalCanRetireAtTarget = isSteppedPlanViable(finalSteppedDWZ, annualExpenses);
+  }
+
   return {
-    canRetireAtTarget,
-    targetAge: retirementAge,
+    canRetireAtTarget: finalCanRetireAtTarget,
+    targetAge,
     earliestFireAge,
     shortfallPhase,
+    dwzPlanningMode,
     kpis: {
-      S_pre: steppedDWZ.S_pre,
-      S_post: steppedDWZ.S_post,
-      planSpend: Math.max(steppedDWZ.S_pre, steppedDWZ.S_post)
+      S_pre: finalSteppedDWZ.S_pre,
+      S_post: finalSteppedDWZ.S_post,
+      planSpend: Math.max(finalSteppedDWZ.S_pre, finalSteppedDWZ.S_post)
     },
     bequest,
     preservationAge: P
