@@ -2,14 +2,15 @@ import * as Money from '../lib/money.js';
 import { annuityFactor } from './dwz_math.js';
 
 /**
- * Compute DWZ stepped spend schedule
+ * Compute DWZ stepped spend schedule with bequest support
  * 
  * Splits retirement into two phases:
  * - Pre-super (bridge): R to P, funded by outside wealth only
- * - Post-super: P to L, funded by remaining super wealth
+ * - Post-super: P to L, funded by remaining super wealth minus bequest
  * 
  * This provides more realistic spending patterns as super becomes accessible,
- * allowing higher post-preservation spending when combined wealth is available.
+ * allowing higher post-preservation spending when combined wealth is available,
+ * while preserving a specified bequest amount.
  * 
  * @param {number} R - Retirement age
  * @param {number} P - Preservation age (when super becomes accessible)
@@ -17,9 +18,10 @@ import { annuityFactor } from './dwz_math.js';
  * @param {number|Decimal} W_out - Outside wealth at retirement (real dollars)
  * @param {number|Decimal} W_sup - Super wealth at retirement (real dollars)
  * @param {number} r - Real return rate (already adjusted for inflation)
- * @returns {Object} { S_pre, S_post, n_b, n_p, W_P, viable }
+ * @param {number} bequest - Amount to leave at death (real dollars, default 0)
+ * @returns {Object} { S_pre, S_post, n_b, n_p, W_P, PV_B, viable }
  */
-export function computeDwzStepped(R, P, L, W_out, W_sup, r) {
+export function computeDwzStepped(R, P, L, W_out, W_sup, r, bequest = 0) {
   // Convert inputs to Decimal for precision
   const outsideWealth = Money.money(W_out);
   const superWealth = Money.money(W_sup);
@@ -35,6 +37,7 @@ export function computeDwzStepped(R, P, L, W_out, W_sup, r) {
     n_b,
     n_p,
     W_P: 0,
+    PV_B: 0,
     viable: false
   };
   
@@ -45,11 +48,21 @@ export function computeDwzStepped(R, P, L, W_out, W_sup, r) {
     const retirementYears = L - R;
     
     if (retirementYears > 0) {
-      const annuity = annuityFactor(retirementYears, r);
-      result.S_post = Money.toNumber(Money.div(totalWealth, annuity));
+      // Calculate present value of bequest
+      const bequestDecimal = Money.money(bequest);
+      const discountFactor = Money.pow(Money.add(1, r), -retirementYears);
+      const PV_B = Money.mul(bequestDecimal, discountFactor);
+      result.PV_B = Money.toNumber(PV_B);
+      
+      // Calculate post-super spend after accounting for bequest
+      const availableForSpending = Money.sub(totalWealth, PV_B);
+      if (Money.toNumber(availableForSpending) > 0) {
+        const annuity = annuityFactor(retirementYears, r);
+        result.S_post = Money.toNumber(Money.div(availableForSpending, annuity));
+        result.viable = true;
+      }
       result.S_pre = 0; // No pre-super phase
       result.W_P = Money.toNumber(totalWealth);
-      result.viable = true;
     }
     
     return result;
@@ -67,14 +80,29 @@ export function computeDwzStepped(R, P, L, W_out, W_sup, r) {
   const W_P_decimal = Money.mul(superWealth, growthFactor);
   result.W_P = Money.toNumber(W_P_decimal);
   
-  // Post-super spend: Use grown super wealth for remaining years
+  // Post-super spend: Use grown super wealth for remaining years minus bequest
   if (n_p > 0) {
-    const postAnnuity = annuityFactor(n_p, r);
-    const S_post_decimal = Money.div(W_P_decimal, postAnnuity);
-    result.S_post = Money.toNumber(S_post_decimal);
+    // Calculate present value of bequest at preservation age
+    const bequestDecimal = Money.money(bequest);
+    const discountFactor = Money.pow(Money.add(1, r), -n_p);
+    const PV_B = Money.mul(bequestDecimal, discountFactor);
+    result.PV_B = Money.toNumber(PV_B);
+    
+    // Calculate available wealth for spending after bequest
+    const availableForSpending = Money.sub(W_P_decimal, PV_B);
+    
+    if (Money.toNumber(availableForSpending) > 0) {
+      const postAnnuity = annuityFactor(n_p, r);
+      const S_post_decimal = Money.div(availableForSpending, postAnnuity);
+      result.S_post = Money.toNumber(S_post_decimal);
+    } else {
+      // Not enough wealth to cover bequest
+      result.S_post = 0;
+    }
   } else {
     // Edge case: Die exactly at preservation age
     result.S_post = 0;
+    result.PV_B = Money.toNumber(Money.money(bequest));
   }
   
   result.viable = result.S_pre > 0 && (n_p === 0 || result.S_post > 0);
@@ -106,7 +134,7 @@ export function isSteppedPlanViable(stepped, requiredSpend) {
 }
 
 /**
- * Find the earliest FIRE age using stepped DWZ logic
+ * Find the earliest FIRE age using stepped DWZ logic with bequest
  * 
  * Uses binary search to find the smallest retirement age R where
  * the stepped plan is viable for the required spending level.
@@ -114,9 +142,10 @@ export function isSteppedPlanViable(stepped, requiredSpend) {
  * @param {Object} params - DWZ parameters (A, P, L, W_out_initial, W_sup_initial, etc.)
  * @param {number} requiredSpend - Annual spending requirement
  * @param {number} L - Life expectancy to use
+ * @param {number} bequest - Amount to leave at death (real dollars, default 0)
  * @returns {number|null} Earliest viable retirement age, or null if not achievable
  */
-export function earliestFireAgeSteppedDWZ(params, requiredSpend, L) {
+export function earliestFireAgeSteppedDWZ(params, requiredSpend, L, bequest = 0) {
   const { A, P, Bout, Bsup, c_out, c_sup, rWorkOut, rWorkSup, rRetOut } = params;
   
   // Binary search bounds
@@ -156,7 +185,7 @@ export function earliestFireAgeSteppedDWZ(params, requiredSpend, L) {
   
   // Check if retirement at hi is viable
   const { W_out: W_out_hi, W_sup: W_sup_hi } = getWealthAtR(hi);
-  const steppedHi = computeDwzStepped(hi, P, L, W_out_hi, W_sup_hi, rRetOut);
+  const steppedHi = computeDwzStepped(hi, P, L, W_out_hi, W_sup_hi, rRetOut, bequest);
   
   if (!isSteppedPlanViable(steppedHi, requiredSpend)) {
     return null; // Not achievable even at latest reasonable age
@@ -168,7 +197,7 @@ export function earliestFireAgeSteppedDWZ(params, requiredSpend, L) {
     
     const mid = Math.floor((lo + hi) / 2);
     const { W_out, W_sup } = getWealthAtR(mid);
-    const stepped = computeDwzStepped(mid, P, L, W_out, W_sup, rRetOut);
+    const stepped = computeDwzStepped(mid, P, L, W_out, W_sup, rRetOut, bequest);
     
     if (isSteppedPlanViable(stepped, requiredSpend)) {
       hi = mid;

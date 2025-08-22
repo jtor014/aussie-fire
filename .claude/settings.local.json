@@ -31,7 +31,9 @@
       "Bash(npm test:*)",
       "Bash(find:*)",
       "Bash(npm version:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr view:*)"
     ],
     "deny": [],
     "ask": []
