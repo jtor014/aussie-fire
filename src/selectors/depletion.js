@@ -2,10 +2,13 @@ import * as Money from '../lib/money.js';
 import { computeDwzStepped } from '../core/dwz_stepped.js';
 
 /**
- * Generate wealth depletion path data for charting
+ * Generate wealth depletion path data for charting using END-OF-YEAR balance convention
  * 
  * Shows the trajectory of total wealth from retirement to life expectancy,
- * with stepped spending and bequest target.
+ * with stepped spending and bequest target. Uses consistent ordering:
+ * 1) Grow balances from age y → y+1
+ * 2) Deduct that year's spending  
+ * 3) Apply transfers/unlocks at preservation boundary exactly once
  * 
  * @param {Object} params - Parameters for depletion calculation
  * @param {number} params.R - Retirement age
@@ -17,71 +20,80 @@ import { computeDwzStepped } from '../core/dwz_stepped.js';
  * @param {number} params.S_pre - Pre-super spending rate
  * @param {number} params.S_post - Post-super spending rate
  * @param {number} params.bequest - Target bequest amount
- * @returns {Array} Array of { age, total, outside, super, spend } objects
+ * @returns {Array} Array of { age, total, outside, super, spend } objects with END-OF-YEAR balances
  */
 export function generateDepletionPath(params) {
   const { R, P, L, W_out, W_sup, r, S_pre, S_post, bequest = 0 } = params;
   
   const path = [];
   
-  // Initialize wealth tracking
+  // Initialize wealth tracking with START-OF-RETIREMENT balances
   let outsideWealth = Money.money(W_out);
   let superWealth = Money.money(W_sup);
   
-  // Generate path from retirement to life expectancy
+  // Generate path from retirement to life expectancy using END-OF-YEAR convention
   for (let age = R; age <= L; age++) {
-    // Determine current spending rate
+    // Determine current year's spending rate
     const currentSpend = age < P ? S_pre : S_post;
     
-    // Record current state
+    // Step 1: Grow balances from start of year age → end of year age
+    const grownOutside = Money.mul(outsideWealth, Money.add(1, r));
+    const grownSuper = Money.mul(superWealth, Money.add(1, r));
+    
+    // Step 2: Deduct this year's spending based on access rules
+    let endOutside, endSuper;
+    
+    if (age < P) {
+      // Pre-preservation: spend from outside only, super grows untouched
+      endOutside = Money.sub(grownOutside, currentSpend);
+      endSuper = grownSuper;
+      
+      // Ensure outside doesn't go negative (bridge constraint)
+      if (Money.toNumber(endOutside) < 0) {
+        endOutside = Money.money(0);
+      }
+    } else {
+      // Post-preservation or at preservation: spend from combined pool
+      const totalGrown = Money.add(grownOutside, grownSuper);
+      const totalAfterSpend = Money.sub(totalGrown, currentSpend);
+      
+      if (Money.toNumber(totalAfterSpend) >= 0) {
+        // Maintain proportional allocation after spending
+        const totalBefore = Money.add(outsideWealth, superWealth);
+        if (Money.toNumber(totalBefore) > 0) {
+          const outsideRatio = Money.toNumber(outsideWealth) / Money.toNumber(totalBefore);
+          endOutside = Money.mul(totalAfterSpend, outsideRatio);
+          endSuper = Money.mul(totalAfterSpend, 1 - outsideRatio);
+        } else {
+          // Edge case: no wealth to allocate
+          endOutside = Money.money(0);
+          endSuper = Money.money(0);
+        }
+      } else {
+        // Depleted: insufficient wealth to cover spending
+        endOutside = Money.money(0);
+        endSuper = Money.money(0);
+      }
+    }
+    
+    // Step 3: Apply preservation unlocks exactly at boundary (no double-counting)
+    // This is handled implicitly by the spending logic above
+    
+    // Record END-OF-YEAR balances for this age
     path.push({
       age,
-      total: Money.toNumber(Money.add(outsideWealth, superWealth)),
-      outside: Money.toNumber(outsideWealth),
-      super: Money.toNumber(superWealth),
+      total: Money.toNumber(Money.add(endOutside, endSuper)),
+      outside: Money.toNumber(endOutside),
+      super: Money.toNumber(endSuper),
       spend: currentSpend
     });
     
-    // Don't update wealth for the final year (L)
-    if (age === L) break;
+    // Update wealth for next iteration
+    outsideWealth = endOutside;
+    superWealth = endSuper;
     
-    // Update wealth for next year
-    if (age < P) {
-      // Pre-preservation: spend from outside only
-      outsideWealth = Money.sub(
-        Money.mul(outsideWealth, Money.add(1, r)),
-        currentSpend
-      );
-      
-      // Super continues to grow
-      superWealth = Money.mul(superWealth, Money.add(1, r));
-      
-      // Ensure outside doesn't go negative
-      if (Money.toNumber(outsideWealth) < 0) {
-        outsideWealth = Money.money(0);
-      }
-    } else {
-      // Post-preservation: spend from combined pool
-      // For simplicity, deplete proportionally
-      const totalWealth = Money.add(outsideWealth, superWealth);
-      const totalAfterSpend = Money.sub(
-        Money.mul(totalWealth, Money.add(1, r)),
-        currentSpend
-      );
-      
-      if (Money.toNumber(totalAfterSpend) > 0) {
-        // Allocate remaining wealth proportionally
-        const outsideRatio = Money.toNumber(outsideWealth) / Money.toNumber(totalWealth);
-        const superRatio = 1 - outsideRatio;
-        
-        outsideWealth = Money.mul(totalAfterSpend, outsideRatio);
-        superWealth = Money.mul(totalAfterSpend, superRatio);
-      } else {
-        // Depleted
-        outsideWealth = Money.money(0);
-        superWealth = Money.money(0);
-      }
-    }
+    // Don't iterate past life expectancy
+    if (age === L) break;
   }
   
   return path;

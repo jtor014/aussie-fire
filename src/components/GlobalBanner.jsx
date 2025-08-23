@@ -1,22 +1,29 @@
 import React from 'react';
 
 /**
- * Global banner that displays retirement decision status.
+ * Global banner that displays retirement decision status (T-011 updated copy).
  * Shows real-time results directly under page title for DWZ mode.
  * 
  * @param {Object} props
  * @param {Object} props.decision - Decision object from decisionFromState
  * @param {string} props.dwzPlanningMode - 'earliest' | 'pinned'
+ * @param {number} props.lifeExpectancy - Life expectancy for display
+ * @param {number} props.bequest - Bequest amount for display
  * @returns {JSX.Element} Global banner component
  */
-export function GlobalBanner({ decision, dwzPlanningMode }) {
+export function GlobalBanner({ decision, dwzPlanningMode, lifeExpectancy, bequest = 0 }) {
   if (!decision) {
     return null;
   }
 
-  const { canRetireAtTarget, targetAge, earliestFireAge, kpis, dwzPlanningMode: mode } = decision;
+  const { canRetireAtTarget, targetAge, earliestFireAge, kpis } = decision;
   
-  // Banner styling
+  // Helper function to format money values with thousands separators (T-011)
+  const formatMoney = (amount) => {
+    return Math.round(amount).toLocaleString();
+  };
+  
+  // Banner styling with aria-live (T-011 accessibility)
   const bannerStyle = {
     width: '100%',
     padding: '16px 20px',
@@ -34,58 +41,73 @@ export function GlobalBanner({ decision, dwzPlanningMode }) {
   const detailStyle = {
     fontSize: '14px',
     fontWeight: '400',
-    marginTop: '4px',
+    marginTop: '8px',
     opacity: 0.9
   };
 
-  // Generate main message based on planning mode and viability
+  // Generate main message based on planning mode and viability (T-011R fixed)
   let mainMessage;
-  let detailMessage = null;
+  let secondaryMessage = null;
 
   if (dwzPlanningMode === 'earliest') {
     if (canRetireAtTarget) {
-      mainMessage = `🎯 You can retire at age ${targetAge} with Die-With-Zero`;
-      if (kpis.S_pre && kpis.S_post && Math.abs(kpis.S_pre - kpis.S_post) > 1000) {
-        const preFmt = Math.round(kpis.S_pre).toLocaleString();
-        const postFmt = Math.round(kpis.S_post).toLocaleString();
-        detailMessage = `Sustainable spending: $${preFmt}/yr before super, $${postFmt}/yr after`;
-      } else {
-        const planSpend = Math.round(kpis.planSpend || kpis.S_pre || kpis.S_post || 0).toLocaleString();
-        detailMessage = `Sustainable spending: $${planSpend}/yr`;
-      }
+      const desiredSpend = formatMoney(kpis.planSpend || kpis.S_pre || kpis.S_post || 0);
+      mainMessage = (
+        <>
+          🎯 Earliest you can retire: <strong>{targetAge}</strong> at <strong>${desiredSpend}/yr</strong> (L={lifeExpectancy}, Bequest=${formatMoney(bequest)})
+        </>
+      );
     } else {
-      mainMessage = `❌ Cannot achieve retirement with current settings`;
-      if (earliestFireAge) {
-        detailMessage = `Need to adjust expectations or save more to reach age ${earliestFireAge}`;
-      } else {
-        detailMessage = `FIRE not achievable with current savings and income`;
-      }
+      mainMessage = <>❌ Cannot achieve retirement with current settings</>;
     }
   } else {
-    // Pinned mode
+    // Pinned mode (T-011R: improved copy)
     if (canRetireAtTarget) {
-      mainMessage = `✅ On track to retire at age ${targetAge}`;
       if (earliestFireAge && earliestFireAge < targetAge) {
-        const yearsSaved = targetAge - earliestFireAge;
-        detailMessage = `You could retire ${yearsSaved} year${yearsSaved > 1 ? 's' : ''} earlier at age ${earliestFireAge}`;
+        mainMessage = (
+          <>
+            ✅ On track to retire at <strong>{targetAge}</strong> (Earliest possible today: {earliestFireAge})
+          </>
+        );
       } else {
-        const planSpend = Math.round(kpis.planSpend || 0).toLocaleString();
-        detailMessage = `Sustainable spending: $${planSpend}/yr`;
+        mainMessage = <>✅ On track to retire at <strong>{targetAge}</strong></>;
       }
     } else {
-      mainMessage = `❌ Cannot retire at age ${targetAge}`;
       if (earliestFireAge) {
-        detailMessage = `Earliest possible today: Age ${earliestFireAge}`;
+        mainMessage = (
+          <>
+            ❌ Cannot retire at age <strong>{targetAge}</strong> (pinned). Earliest possible today: {earliestFireAge}.
+          </>
+        );
       } else {
-        detailMessage = `Need to save more or reduce target spending`;
+        mainMessage = <>❌ Cannot retire at age <strong>{targetAge}</strong> (pinned)</>;
       }
     }
   }
 
+  // Secondary line: sustainable spending details (T-011R fixed)
+  if (kpis.S_pre && kpis.S_post) {
+    const preSpend = formatMoney(kpis.S_pre);
+    const postSpend = formatMoney(kpis.S_post);
+    if (Math.abs(kpis.S_pre - kpis.S_post) > 1000) {
+      secondaryMessage = (
+        <>
+          Sustainable (DWZ): <strong>${preSpend}/yr before super</strong> • <strong>${postSpend}/yr after super</strong>
+        </>
+      );
+    } else {
+      secondaryMessage = (
+        <>
+          Sustainable (DWZ): <strong>${preSpend}/yr</strong>
+        </>
+      );
+    }
+  }
+
   return (
-    <div style={bannerStyle}>
+    <div style={bannerStyle} aria-live="polite">
       <div>{mainMessage}</div>
-      {detailMessage && <div style={detailStyle}>{detailMessage}</div>}
+      {secondaryMessage && <div style={detailStyle}>{secondaryMessage}</div>}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { kpisFromState, extractDisplayKpis } from './selectors/kpis.js';
+import { kpisFromState } from './selectors/kpis.js';
 import { decisionFromState, getDecisionDisplay } from './selectors/decision.js';
 import { depletionFromDecision } from './selectors/depletion.js';
 import { dwzStrategyFromState, getStrategyDisplay } from './selectors/strategy.js';
@@ -7,11 +7,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import auRules from './data/au_rules.json';
 import { calcIncomeTax, getMarginalRate } from './core/tax';
 import { calcSuperContribs } from './core/super';
-import { assessBridge } from './core/bridge';
 import { getPreservationAge } from './core/preservation';
 import { mkPartner, mkHousehold } from './models/shapes';
 import { projectCouple } from './core/household';
-import { dwzFromSingleState, maxSpendDWZSingle, earliestFireAgeDWZSingle, getAtRetirementBalances } from './core/dwz_single.js';
 import { dwzPersonFromState, maxSpendDWZCouple, earliestFireAgeDWZCouple, getCoupleAtRetirementBalances } from './core/dwz_couples.js';
 import { GlobalBanner } from './components/GlobalBanner.jsx';
 
@@ -91,22 +89,22 @@ function seriesSingle({ outAtR, supAtR, rOut, rSup, P }, R, L, W) {
   return points;
 }
 
-// Utility for accumulation phase (pre-FIRE)
-function simulateAccumToAge({ startAge, endAge, out0, sup0, annualSavings, netSuperContribution, r }) {
-  const pts = [];
-  let age = startAge;
-  let out = out0;
-  let sup = sup0;
-  while (age < endAge) {
-    if (annualSavings > 0) out += annualSavings;
-    sup += netSuperContribution;
-    out *= (1 + r);
-    sup *= (1 + r);
-    pts.push({ age, outside: Math.max(out, 0), super: Math.max(sup, 0) });
-    age++;
-  }
-  return { pts, out, sup };
-}
+// Utility for accumulation phase (pre-FIRE) - currently unused but kept for reference
+// function simulateAccumToAge({ startAge, endAge, out0, sup0, annualSavings, netSuperContribution, r }) {
+//   const pts = [];
+//   let age = startAge;
+//   let out = out0;
+//   let sup = sup0;
+//   while (age < endAge) {
+//     if (annualSavings > 0) out += annualSavings;
+//     sup += netSuperContribution;
+//     out *= (1 + r);
+//     sup *= (1 + r);
+//     pts.push({ age, outside: Math.max(out, 0), super: Math.max(sup, 0) });
+//     age++;
+//   }
+//   return { pts, out, sup };
+// }
 
 function PartnerSuperPanel({
   label, income, extra, onExtraChange,
@@ -745,7 +743,7 @@ const AustralianFireCalculator = () => {
   // Display-ready decision data
   const decisionDisplay = useMemo(() => getDecisionDisplay(decision), [decision]);
   
-  // DWZ depletion path data for charting
+  // DWZ depletion path data for charting (T-011: fallback to earliest when pinned not viable)
   const depletionData = useMemo(() => {
     const state = {
       currentAge,
@@ -759,8 +757,18 @@ const AustralianFireCalculator = () => {
       inflationRate
     };
     
+    // If pinned mode and not viable, create alternate decision for earliest age
+    if (dwzPlanningMode === 'pinned' && !decision.canRetireAtTarget && decision.earliestFireAge) {
+      const earliestDecision = {
+        ...decision,
+        targetAge: decision.earliestFireAge,
+        canRetireAtTarget: true // Use earliest viable age
+      };
+      return depletionFromDecision(state, earliestDecision, auRules);
+    }
+    
     return depletionFromDecision(state, decision, auRules);
-  }, [decision, currentAge, lifeExpectancy, bequest, annualIncome, annualExpenses, 
+  }, [decision, dwzPlanningMode, currentAge, lifeExpectancy, bequest, annualIncome, annualExpenses, 
       currentSavings, currentSuper, expectedReturn, inflationRate]);
   
   // Strategy optimization
@@ -1084,7 +1092,12 @@ const AustralianFireCalculator = () => {
       <h1 style={titleStyle}>🇦🇺 Australian FIRE Calculator</h1>
       
       {/* Global DWZ Results Banner */}
-      <GlobalBanner decision={decision} dwzPlanningMode={dwzPlanningMode} />
+      <GlobalBanner 
+        decision={decision} 
+        dwzPlanningMode={dwzPlanningMode} 
+        lifeExpectancy={lifeExpectancy}
+        bequest={bequest}
+      />
 
 
       {/* Your Situation - PayCalculator Style */}
@@ -1923,7 +1936,7 @@ const AustralianFireCalculator = () => {
       <div style={{ ...sectionStyle, border: '2px solid #8b5cf6', backgroundColor: '#f3f4f6' }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
           <label style={{ ...labelStyle, margin: 0, flex: 1 }}>
-            <span style={{ fontSize: '16px', fontWeight: '700' }}>Die with Zero Settings 💀</span>
+            <span style={{ fontSize: '16px', fontWeight: '700' }}>Die-With-Zero Settings 💀</span>
             <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}>
               Spend it all - you can't take it with you!
             </div>
@@ -2017,88 +2030,42 @@ const AustralianFireCalculator = () => {
               />
             </div>
 
-            {/* DWZ Banner & Results - Updated for earliest-first */}
+            {/* Compact Status Chip (T-011) */}
             <div style={{
-              marginTop: 16, 
-              padding: 16, 
-              border: '2px solid #e5e7eb', 
-              borderRadius: 12,
+              marginTop: 16,
+              display: 'inline-block',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              fontSize: '14px',
+              fontWeight: '600',
               backgroundColor: decision.earliestFireAge ? '#f0fdf4' : '#fef2f2',
-              borderColor: decision.earliestFireAge ? '#16a34a' : '#dc2626'
+              color: decision.earliestFireAge ? '#059669' : '#dc2626',
+              border: `1px solid ${decision.earliestFireAge ? '#059669' : '#dc2626'}`,
             }}>
-              {/* Main Banner */}
-              <div style={{ 
-                textAlign: 'center', 
-                marginBottom: 16,
-                fontSize: 18,
-                fontWeight: 600 
-              }}>
-{decision.earliestFireAge ? (
-                  dwzPlanningMode === 'earliest' ? (
-                    <React.Fragment>
-                      🎯 <span style={{ color: '#16a34a' }}>You can retire at age {decision.targetAge}</span> with DWZ
-                    </React.Fragment>
-                  ) : (
-                    decision.canRetireAtTarget ? (
-                      <React.Fragment>
-                        ✅ <span style={{ color: '#16a34a' }}>On track to retire at age {decision.targetAge}</span>
-                        {decision.earliestFireAge < decision.targetAge && (
-                          <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 400, marginTop: 4 }}>
-                            Earliest possible: Age {decision.earliestFireAge} ({decision.targetAge - decision.earliestFireAge} years earlier)
-                          </div>
-                        )}
-                      </React.Fragment>
-                    ) : (
-                      <React.Fragment>
-                        ❌ <span style={{ color: '#dc2626' }}>Cannot retire at age {decision.targetAge}</span>
-                        <div style={{ fontSize: 14, color: '#6b7280', fontWeight: 400, marginTop: 4 }}>
-                          Earliest possible today: Age {decision.earliestFireAge}
-                        </div>
-                      </React.Fragment>
-                    )
-                  )
-                ) : (
-                  <span style={{ color: '#dc2626' }}>Not viable with current DWZ settings</span>
-                )}
-              </div>
-
-              {/* DWZ Details Grid */}
-              {decision.earliestFireAge && (
-                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(200px,1fr))', gap:12, marginTop:16}}>
-                  <div>
-                    <div style={{fontSize:13, color:'#4b5563'}}>Sustainable spend (real)</div>
-                    <div style={{fontSize:18, fontWeight:600}}>
-                      {decisionDisplay.sustainableSpend || `$${Math.round(kpis.sustainableSpend).toLocaleString()}/yr`}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:13, color:'#4b5563'}}>Your plan spend</div>
-                    <div style={{fontSize:18, fontWeight:600}}>
-                      ${Math.round(annualExpenses).toLocaleString()}/yr
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:13, color:'#4b5563'}}>Status</div>
-                    <div style={{fontSize:18, fontWeight:600, color: decision.canRetireAtTarget ? '#059669' : '#dc2626'}}>
-                      {decision.canRetireAtTarget ? 'Viable' : 'Shortfall'}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Additional info */}
-              <div style={{marginTop:12, fontSize:12, color:'#6b7280', textAlign:'center'}}>
-                Real (today's) dollars. Outside money covers the bridge until super unlocks at preservation age {auRules.preservation_age || 60}. Life expectancy set to {lifeExpectancy}.
-              </div>
-
-              {/* Not viable help text */}
-              {!decision.earliestFireAge && (
-                <div style={{marginTop:8, fontSize:13, color:'#6b7280', textAlign:'center'}}>
-                  At current assumptions, the plan spend isn't sustainable before life expectancy.
-                  Try lowering spend, increasing contributions, or adjusting returns.
-                </div>
+              {dwzPlanningMode === 'earliest' ? (
+                decision.earliestFireAge ? 
+                  `Viable — earliest age ${decision.targetAge}` :
+                  'Not viable'
+              ) : (
+                `Pinned ${decision.targetAge} ${decision.canRetireAtTarget ? 'Viable' : 'Not viable'} — earliest ${decision.earliestFireAge || 'N/A'}`
               )}
             </div>
+
+            {/* Sustainable spending summary (T-011) */}
+            {decision.earliestFireAge && kpis.S_pre && kpis.S_post && (
+              <div style={{
+                marginTop: 12,
+                fontSize: '13px',
+                color: '#4b5563',
+                lineHeight: '1.5'
+              }}>
+                {Math.abs(kpis.S_pre - kpis.S_post) > 1000 ? (
+                  <div>Sustainable spending (DWZ): <strong>${Math.round(kpis.S_pre).toLocaleString()} before super</strong> / <strong>${Math.round(kpis.S_post).toLocaleString()} after super</strong></div>
+                ) : (
+                  <div>Sustainable spending (DWZ): <strong>${Math.round(kpis.S_pre).toLocaleString()}/yr</strong></div>
+                )}
+              </div>
+            )}
             
             {/* Strategy Card */}
             {strategyDisplay && (
@@ -2114,46 +2081,80 @@ const AustralianFireCalculator = () => {
                     </div>
                     
                     {strategyDisplay.splits.person1 ? (
-                      // Couple display
-                      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12}}>
+                      // Couple display (T-011)
+                      <dl style={{margin: 0, marginBottom: 12}}>
+                        {strategyDisplay.splits.person1.salarysacrifice > 0 ? (
+                          <div style={{marginBottom: 8}}>
+                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 1 salary sacrifice:</dt>
+                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                              ${strategyDisplay.splits.person1.salarysacrifice.toLocaleString()} 
+                              <span style={{fontSize: 11, color: '#6b7280', fontWeight: 400}}> (cap used {strategyDisplay.splits.person1.capUse}% incl. SG)</span>
+                            </dd>
+                          </div>
+                        ) : (
+                          <div style={{marginBottom: 8}}>
+                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 1:</dt>
+                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                              SG uses {strategyDisplay.splits.person1.capUse}% of cap
+                            </dd>
+                          </div>
+                        )}
+                        
+                        {strategyDisplay.splits.person2.salarysacrifice > 0 ? (
+                          <div style={{marginBottom: 8}}>
+                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 2 salary sacrifice:</dt>
+                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                              ${strategyDisplay.splits.person2.salarysacrifice.toLocaleString()} 
+                              <span style={{fontSize: 11, color: '#6b7280', fontWeight: 400}}> (cap used {strategyDisplay.splits.person2.capUse}% incl. SG)</span>
+                            </dd>
+                          </div>
+                        ) : (
+                          <div style={{marginBottom: 8}}>
+                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 2:</dt>
+                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                              SG uses {strategyDisplay.splits.person2.capUse}% of cap
+                            </dd>
+                          </div>
+                        )}
+                        
                         <div>
-                          <div style={{fontSize:12, color:'#6b7280'}}>Person 1</div>
-                          <div style={{fontSize:16, fontWeight:600}}>
-                            ${strategyDisplay.splits.person1.salarysacrifice?.toLocaleString()} SAC
-                          </div>
-                          <div style={{fontSize:11, color:'#6b7280'}}>
-                            {strategyDisplay.splits.person1.capUse}% of cap
-                          </div>
+                          <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Joint outside:</dt>
+                          <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                            ${((strategyDisplay.splits.person1.outside || 0) + (strategyDisplay.splits.person2.outside || 0)).toLocaleString()}
+                          </dd>
                         </div>
-                        <div>
-                          <div style={{fontSize:12, color:'#6b7280'}}>Person 2</div>
-                          <div style={{fontSize:16, fontWeight:600}}>
-                            ${strategyDisplay.splits.person2.salarysacrifice?.toLocaleString()} SAC
-                          </div>
-                          <div style={{fontSize:11, color:'#6b7280'}}>
-                            {strategyDisplay.splits.person2.capUse}% of cap
-                          </div>
-                        </div>
-                      </div>
+                      </dl>
                     ) : (
-                      // Single display
-                      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12}}>
-                        <div>
-                          <div style={{fontSize:12, color:'#6b7280'}}>Salary Sacrifice</div>
-                          <div style={{fontSize:16, fontWeight:600}}>
-                            ${strategyDisplay.splits.salarysacrifice?.toLocaleString()}
-                          </div>
-                          <div style={{fontSize:11, color:'#6b7280'}}>
-                            {strategyDisplay.splits.capUse}% of cap
-                          </div>
+                      // Single display (T-011)
+                      <dl style={{margin: 0, marginBottom: 12}}>
+                        <div style={{marginBottom: 8}}>
+                          {strategyDisplay.splits.salarysacrifice > 0 ? (
+                            <>
+                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Salary sacrifice:</dt>
+                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                                ${strategyDisplay.splits.salarysacrifice.toLocaleString()} 
+                                <span style={{fontSize: 11, color: '#6b7280', fontWeight: 400}}> (cap used {strategyDisplay.splits.capUse}% incl. SG)</span>
+                                {' • '}
+                              </dd>
+                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Outside:</dt>
+                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                                ${strategyDisplay.splits.outside?.toLocaleString()}
+                              </dd>
+                            </>
+                          ) : (
+                            <>
+                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Salary sacrifice:</dt>
+                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                                $0 (SG uses {strategyDisplay.splits.capUse}% of cap) • 
+                              </dd>
+                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Outside:</dt>
+                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
+                                ${strategyDisplay.splits.outside?.toLocaleString()}
+                              </dd>
+                            </>
+                          )}
                         </div>
-                        <div>
-                          <div style={{fontSize:12, color:'#6b7280'}}>Outside Investment</div>
-                          <div style={{fontSize:16, fontWeight:600}}>
-                            ${strategyDisplay.splits.outside?.toLocaleString()}
-                          </div>
-                        </div>
-                      </div>
+                      </dl>
                     )}
                     
                     <details style={{cursor:'pointer'}}>
@@ -2164,6 +2165,22 @@ const AustralianFireCalculator = () => {
                         {strategyDisplay.rationale?.map((reason, idx) => (
                           <div key={idx} style={{marginBottom:4}}>• {reason}</div>
                         ))}
+                        
+                        {/* Add dynamic bullet for SAC=$0 (T-011) */}
+                        {!strategyDisplay.splits.person1 && strategyDisplay.splits.salarysacrifice === 0 && (
+                          <div style={{marginBottom:4}}>
+                            • No salary sacrifice recommended because bridge liquidity dominates; keeping funds outside super enables earlier retirement.
+                          </div>
+                        )}
+                        
+                        {/* Add for couples if both have SAC=$0 */}
+                        {strategyDisplay.splits.person1 && 
+                         strategyDisplay.splits.person1.salarysacrifice === 0 && 
+                         strategyDisplay.splits.person2.salarysacrifice === 0 && (
+                          <div style={{marginBottom:4}}>
+                            • No salary sacrifice recommended because bridge liquidity dominates; keeping funds outside super enables earlier retirement.
+                          </div>
+                        )}
                       </div>
                     </details>
                   </>
@@ -2392,7 +2409,7 @@ const AustralianFireCalculator = () => {
             />
             <Tooltip content={<CustomTooltip />} />
 
-            {/* Chart markers based on planning mode (T-010) */}
+            {/* Chart markers based on planning mode (T-011) */}
             {dwzPlanningMode === 'earliest' ? (
               // Earliest mode: show marker for earliest FIRE age if available
               decision.earliestFireAge != null && (
@@ -2404,13 +2421,38 @@ const AustralianFireCalculator = () => {
                 />
               )
             ) : (
-              // Pinned mode: show marker for target retirement age
-              <ReferenceLine 
-                x={decision.targetAge || retirementAge} 
-                stroke="#6b7280" 
-                strokeDasharray="5 5"
-                label={{ value: `Target: ${decision.targetAge || retirementAge}`, position: "top" }}
-              />
+              // Pinned mode: show both viable target and earliest (if not viable)
+              <React.Fragment>
+                {decision.canRetireAtTarget ? (
+                  // Viable pinned age: show solid line
+                  <ReferenceLine 
+                    x={decision.targetAge || retirementAge} 
+                    stroke="#6b7280" 
+                    strokeDasharray="5 5"
+                    label={{ value: `Target: ${decision.targetAge || retirementAge}`, position: "top" }}
+                  />
+                ) : (
+                  <React.Fragment>
+                    {/* Non-viable pinned age: thin dotted line */}
+                    <ReferenceLine 
+                      x={pinnedRetirementAge} 
+                      stroke="#dc2626" 
+                      strokeDasharray="2 2"
+                      strokeWidth={1}
+                      label={{ value: `Pinned (not viable)`, position: "top", fill: '#dc2626', fontSize: 10 }}
+                    />
+                    {/* Show earliest viable age */}
+                    {decision.earliestFireAge != null && (
+                      <ReferenceLine
+                        x={decision.earliestFireAge}
+                        stroke="#059669"
+                        strokeDasharray="4 3"
+                        label={{ value: `Earliest viable: ${decision.earliestFireAge}`, position: 'topLeft', fill: '#059669', fontSize: 12 }}
+                      />
+                    )}
+                  </React.Fragment>
+                )}
+              </React.Fragment>
             )}
             {depletionData?.markers?.map((marker, index) => (
               <ReferenceLine
