@@ -2,6 +2,7 @@ import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz
 import { computeDwzStepped, isSteppedPlanViable, earliestFireAgeSteppedDWZ, getSteppedConstraint } from '../core/dwz_stepped.js';
 import { solveSustainableSpending, findEarliestRetirement, checkConstraintViolations, analyzeBindingConstraint, makeBandAtAge } from '../core/dwz_age_band.js';
 import { normalizeBandSettings, createFlatSchedule, createAgeBandedSchedule } from '../lib/validation/ageBands.js';
+import { getPreservationAge } from '../core/preservation.js';
 import Decimal from 'decimal.js-light';
 
 /**
@@ -37,8 +38,14 @@ export function decisionFromState(state, rules) {
   const inflation = new Decimal(state.inflationRate / 100 || 0.025);
   const realReturn = nominalReturn.sub(inflation).div(inflation.add(1));
 
-  // Preservation age - use default 60 for now (can be enhanced later for age-specific lookup)
-  const P = 60;
+  // T-021: Use proper age-specific preservation age lookup for consistency
+  // Fall back to rules-based if getPreservationAge fails (needs DOB, but we only have currentAge)
+  let P;
+  try {
+    P = getPreservationAge(state.currentAge, rules);
+  } catch {
+    P = rules.preservation_age || 60;
+  }
 
   // T-018: Generate bands based on toggle setting
   let bands = [];
@@ -198,7 +205,7 @@ export function decisionFromState(state, rules) {
     S_post = solution.sustainableAnnual.mul(postBand.multiplier);
   }
 
-  // T-017: Analyze binding constraint at earliest age
+  // T-021: Use unified bridge assessment from solver
   let constraint = null;
   if (earliestResult.earliestAge && solution.sustainableAnnual.gt(0)) {
     const bandAtAge = makeBandAtAge(solutionBands);
@@ -230,7 +237,9 @@ export function decisionFromState(state, rules) {
       S_post: S_post.toNumber(),
       planSpend: S_pre.gt(S_post) ? S_pre.toNumber() : S_post.toNumber(),
       // T-017: Binding constraint analysis
-      constraint
+      constraint,
+      // T-021: Bridge assessment from unified solver
+      bridgeAssessment: solution.bridgeAssessment
     },
     bequest,
     preservationAge: P,

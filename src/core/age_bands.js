@@ -8,6 +8,34 @@
  */
 import Decimal from 'decimal.js-light';
 
+/**
+ * Build a yearly spending schedule using age bands and base sustainable spending
+ * @param {Object} params
+ * @param {number} params.R - Retirement age
+ * @param {number} params.L - Life expectancy
+ * @param {number} params.S - Base sustainable annual spending
+ * @param {Array} params.bands - Age band schedule from createAgeBandedSchedule
+ * @returns {Array} Array of {age, spend} objects for each year R..L
+ */
+export function buildSpendingSchedule({ R, L, S, bands }) {
+  const schedule = [];
+  const baseSpend = new Decimal(S);
+  
+  for (let age = R; age < L; age++) {
+    // Find the band for this age
+    const band = bands.find(b => age >= b.startAge && age < b.endAge);
+    const multiplier = band ? new Decimal(band.multiplier) : new Decimal(1.0);
+    
+    const yearlySpend = baseSpend.mul(multiplier);
+    schedule.push({
+      age,
+      spend: yearlySpend.toNumber()
+    });
+  }
+  
+  return schedule;
+}
+
 // Age band multipliers
 export const AGE_BAND_MULTIPLIERS = {
   goGo: new Decimal(1.10),

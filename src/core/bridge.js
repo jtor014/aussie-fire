@@ -1,4 +1,55 @@
 import * as Money from "../lib/money.js";
+import Decimal from 'decimal.js-light';
+
+/**
+ * Compute bridge requirement using age-banded spending schedule
+ * Integrates PV of spending from R to preservationAge for outside-funded years only
+ * 
+ * @param {Object} params
+ * @param {number} params.R - Retirement age 
+ * @param {number} params.presAge - Preservation age (when super unlocks)
+ * @param {Array} params.schedule - Yearly spending schedule [{age, spend}, ...]
+ * @param {number} params.outsideAtR - Outside wealth available at retirement
+ * @param {number} params.realReturn - Real return rate (decimal, e.g., 0.055)
+ * @returns {Object} Bridge assessment {neededPV, havePV, years, covered}
+ */
+export function computeBridgeRequirement({ R, presAge, schedule, outsideAtR, realReturn }) {
+  const bridgeYears = Math.max(0, presAge - R);
+  
+  if (bridgeYears === 0) {
+    // No bridge period needed
+    return {
+      neededPV: 0,
+      havePV: outsideAtR,
+      years: 0,
+      covered: true
+    };
+  }
+  
+  // Calculate PV of spending during bridge period (R to presAge)
+  let neededPV = 0;
+  const returnRate = new Decimal(realReturn);
+  const discountFactor = returnRate.add(1);
+  
+  for (let i = 0; i < bridgeYears; i++) {
+    const ageIdx = R + i;
+    const yearSpend = schedule.find(s => s.age === ageIdx)?.spend || 0;
+    
+    // Discount to present value (at retirement age R)  
+    const pvSpend = new Decimal(yearSpend).div(discountFactor.pow(i));
+    neededPV += pvSpend.toNumber();
+  }
+  
+  const havePV = outsideAtR;
+  const covered = havePV >= neededPV;
+  
+  return {
+    neededPV,
+    havePV, 
+    years: bridgeYears,
+    covered
+  };
+}
 
 /**
  * Assess whether outside-super funds can cover the years between
