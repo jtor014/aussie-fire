@@ -70,40 +70,74 @@ export function computeDwzStepped(R, P, L, W_out, W_sup, r, bequest = 0) {
   
   // Case 2: Bridge period exists (R < P)
   
-  // Pre-super spend: Exhaust outside wealth by preservation age
-  const bridgeAnnuity = annuityFactor(n_b, r);
-  const S_pre_decimal = Money.div(outsideWealth, bridgeAnnuity);
-  result.S_pre = Money.toNumber(S_pre_decimal);
+  // Calculate total retirement years and bequest PV at retirement
+  const totalRetirementYears = L - R;
+  const bequestDecimal = Money.money(bequest);
+  const bequestDiscountFactor = Money.pow(Money.add(1, r), -totalRetirementYears);
+  const totalPV_B = Money.mul(bequestDecimal, bequestDiscountFactor);
   
-  // Super grows during bridge period
+  // Total wealth available for spending (after bequest)
+  const totalWealth = Money.add(outsideWealth, superWealth);
+  const totalAvailableForSpending = Money.sub(totalWealth, totalPV_B);
+  
+  if (Money.toNumber(totalAvailableForSpending) <= 0) {
+    // Not enough wealth to cover bequest
+    result.S_pre = 0;
+    result.S_post = 0;
+    result.PV_B = Money.toNumber(totalPV_B);
+    result.W_P = Money.toNumber(superWealth);
+    return result;
+  }
+  
+  // DWZ stepped methodology: Balanced spending across retirement phases
+  // - Pre-super (R to P): funded by outside wealth only (constraint)
+  // - Post-super (P to L): funded by remaining wealth (outside + super)
+  // Goal: Maximize sustainable spending while respecting super access constraint
+  
+  const bridgeAnnuity = annuityFactor(n_b, r);
+  const postAnnuity = annuityFactor(n_p, r);
+  
+  // Super grows during bridge period (can't be touched)
   const growthFactor = Money.pow(Money.add(1, r), n_b);
   const W_P_decimal = Money.mul(superWealth, growthFactor);
   result.W_P = Money.toNumber(W_P_decimal);
   
-  // Post-super spend: Use grown super wealth for remaining years minus bequest
-  if (n_p > 0) {
-    // Calculate present value of bequest at preservation age
-    const bequestDecimal = Money.money(bequest);
-    const discountFactor = Money.pow(Money.add(1, r), -n_p);
-    const PV_B = Money.mul(bequestDecimal, discountFactor);
-    result.PV_B = Money.toNumber(PV_B);
-    
-    // Calculate available wealth for spending after bequest
-    const availableForSpending = Money.sub(W_P_decimal, PV_B);
-    
-    if (Money.toNumber(availableForSpending) > 0) {
-      const postAnnuity = annuityFactor(n_p, r);
-      const S_post_decimal = Money.div(availableForSpending, postAnnuity);
-      result.S_post = Money.toNumber(S_post_decimal);
-    } else {
-      // Not enough wealth to cover bequest
-      result.S_post = 0;
-    }
-  } else {
-    // Edge case: Die exactly at preservation age
+  if (n_p === 0) {
+    // Die exactly at preservation age - spend all outside wealth during bridge
+    result.S_pre = Money.toNumber(Money.div(outsideWealth, bridgeAnnuity));
     result.S_post = 0;
-    result.PV_B = Money.toNumber(Money.money(bequest));
+    result.PV_B = Money.toNumber(totalPV_B);
+    result.viable = result.S_pre > 0;
+    return result;
   }
+  
+  // Balanced DWZ approach: Find optimal spending that doesn't exhaust outside wealth unnecessarily
+  // Present value factors for spending phases
+  const bridgePVFactor = bridgeAnnuity;
+  const postPVFactor = Money.mul(postAnnuity, Money.pow(Money.add(1, r), -n_b));
+  const totalPVFactor = Money.add(bridgePVFactor, postPVFactor);
+  
+  // Calculate equal spending level across both phases
+  const equalSpend = Money.div(totalAvailableForSpending, totalPVFactor);
+  const equalSpendBridgeCost = Money.mul(equalSpend, bridgeAnnuity);
+  
+  if (Money.toNumber(equalSpendBridgeCost) <= Money.toNumber(outsideWealth)) {
+    // Equal spending is feasible - use balanced approach
+    result.S_pre = Money.toNumber(equalSpend);
+    result.S_post = Money.toNumber(equalSpend);
+  } else {
+    // Bridge constraint binding - optimize within constraint
+    // Max spend during bridge limited by outside wealth
+    const maxS_pre = Money.div(outsideWealth, bridgeAnnuity);
+    result.S_pre = Money.toNumber(maxS_pre);
+    
+    // Remaining wealth used for post-super period
+    const usedBridgePV = Money.mul(maxS_pre, bridgePVFactor);
+    const remainingPV = Money.sub(totalAvailableForSpending, usedBridgePV);
+    result.S_post = Money.toNumber(Money.div(remainingPV, postPVFactor));
+  }
+  
+  result.PV_B = Money.toNumber(totalPV_B);
   
   result.viable = result.S_pre > 0 && (n_p === 0 || result.S_post > 0);
   

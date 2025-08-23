@@ -29,14 +29,18 @@ describe('DWZ Stepped Spend - Core Calculations', () => {
     expect(result.n_b).toBe(7);  // Bridge: 53 to 60
     expect(result.n_p).toBe(30); // Post: 60 to 90
     
-    // Verify spend values are reasonable
-    expect(result.S_pre).toBeGreaterThan(120000);  // Pre-super spend
-    expect(result.S_pre).toBeLessThan(150000);
+    // Verify spend values are reasonable (balanced approach)
+    expect(result.S_pre).toBeGreaterThan(70000);   // Pre-super spend
+    expect(result.S_pre).toBeLessThan(120000);
     
-    // With large super, post should typically be higher
-    // But this depends on the relative sizes and periods
-    expect(result.S_post).toBeGreaterThan(50000);
-    expect(result.S_post).toBeLessThan(200000);
+    // With balanced approach, both phases should be similar
+    expect(result.S_post).toBeGreaterThan(70000);
+    expect(result.S_post).toBeLessThan(120000);
+    
+    // Spending should be relatively balanced (within 20% difference)
+    const spendDiff = Math.abs(result.S_pre - result.S_post);
+    const avgSpend = (result.S_pre + result.S_post) / 2;
+    expect(spendDiff / avgSpend).toBeLessThan(0.2);
     
     // Verify viability
     expect(result.viable).toBe(true);
@@ -144,8 +148,8 @@ describe('DWZ Stepped Spend - Invariants', () => {
   });
 
   /**
-   * Invariant: Reducing L increases S_post, doesn't decrease S_pre
-   * Earliest should be non-increasing with shorter L when post-limited
+   * Invariant: Shorter life expectancy increases sustainable spending (balanced approach)
+   * Both S_pre and S_post should increase with shorter life expectancy
    */
   it('Invariant: Shorter life expectancy improves or maintains spend levels', () => {
     const R = 55;
@@ -160,11 +164,13 @@ describe('DWZ Stepped Spend - Invariants', () => {
     const resultLong = computeDwzStepped(R, P, L_long, W_out, W_sup, r_real);
     const resultShort = computeDwzStepped(R, P, L_short, W_out, W_sup, r_real);
     
-    // S_pre should be unchanged (same bridge period)
-    expect(Math.abs(resultShort.S_pre - resultLong.S_pre)).toBeLessThan(1);
-    
-    // S_post should increase with shorter life expectancy
+    // With balanced approach, both spending phases should increase with shorter life
+    expect(resultShort.S_pre).toBeGreaterThan(resultLong.S_pre);
     expect(resultShort.S_post).toBeGreaterThan(resultLong.S_post);
+    
+    // Both scenarios should remain viable
+    expect(resultLong.viable).toBe(true);
+    expect(resultShort.viable).toBe(true);
   });
 
   /**

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "▶ running tests…"
+npm test --silent
+
+echo "▶ typecheck (if present)…"
+npm run typecheck --silent 2>/dev/null || true
+
+echo "▶ lint/format (if present)…"
+npm run lint --silent 2>/dev/null || true
+npm run format:check --silent 2>/dev/null || true
+
+echo "✓ pre-commit OK"

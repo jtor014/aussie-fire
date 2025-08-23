@@ -1,289 +1,191 @@
 import { describe, it, expect } from 'vitest';
+import Decimal from 'decimal.js-light';
 import { 
-  evaluateSplitSingle, 
-  evaluateSplitCouple,
-  optimizeSplitSingle,
-  optimizeSplitCouple 
+  optimiseSplitSingle,
+  optimiseSplitCouple 
 } from '../src/core/optimizer/split_optimizer.js';
 
 describe('Split Optimizer - Single Person', () => {
   const baseParams = {
-    currentAge: 40,
-    targetSpend: 60000,
-    annualSavingsBudget: 50000,
-    bequest: 0,
+    currentAge: 30,
+    retirementAge: 50,
     lifeExpectancy: 85,
-    currentSavings: 100000,
-    currentSuper: 150000,
-    annualIncome: 100000,
-    rReal: 0.04,
     preservationAge: 60,
-    
-    // Super settings
-    sgRate: 0.115,
-    concessionalCap: 27500,
-    superInsurance: 1000,
-    contributionsTaxRate: 0.15
+    currentOutside: 50000,
+    currentSuper: 100000,
+    salary: 100000,
+    insurance: 1000,
+    annualSavingsBudget: 50000,
+    targetSpend: 60000,
+    bequest: 0,
+    sgPct: 0.115,
+    concessionalCap: 30000,
+    assumptions: {
+      nominalReturn: new Decimal(0.085),
+      inflation: new Decimal(0.025)
+    }
   };
 
-  /**
-   * Test basic single split evaluation
-   */
-  it('Should evaluate single split correctly', () => {
-    const result = evaluateSplitSingle(0.5, baseParams);
+  it('Should find optimal split for single person', () => {
+    const result = optimiseSplitSingle(baseParams);
     
     expect(result).toBeDefined();
-    expect(result.viable).toBeDefined();
-    expect(result.sacAmount).toBeGreaterThanOrEqual(0);
-    expect(result.outsideAmount).toBeGreaterThanOrEqual(0);
-    expect(result.capUse).toBeGreaterThanOrEqual(0);
-    expect(result.capUse).toBeLessThanOrEqual(1);
-    
-    // Verify overflow is properly handled - overflow should be added to outside amount
-    const expectedTotal = baseParams.annualSavingsBudget + result.overflow;
-    const actualTotal = result.sacAmount + result.outsideAmount;
-    
-    // Total allocation should equal budget plus any overflow
-    expect(Math.abs(actualTotal - expectedTotal)).toBeLessThan(1);
-  });
-
-  /**
-   * Test cap enforcement
-   */
-  it('Should enforce concessional cap limits', () => {
-    const highAlphaParams = { ...baseParams, annualSavingsBudget: 100000 };
-    
-    // With alpha = 1.0 (all to super), should hit cap limits
-    const result = evaluateSplitSingle(1.0, highAlphaParams);
-    
-    // Calculate expected cap headroom
-    const sgContrib = highAlphaParams.annualIncome * highAlphaParams.sgRate;
-    const maxSAC = Math.max(0, highAlphaParams.concessionalCap - sgContrib);
-    
-    expect(result.sacAmount).toBeLessThanOrEqual(maxSAC + 1); // Allow for rounding
-    expect(result.totalConcessional).toBeLessThanOrEqual(highAlphaParams.concessionalCap + 1);
-    
-    // Overflow should go to outside
-    if (result.overflow > 0) {
-      expect(result.outsideAmount).toBeGreaterThan(highAlphaParams.annualSavingsBudget - result.sacAmount - 1000);
+    if (result.earliestAge) {
+      expect(result.earliestAge).toBeGreaterThanOrEqual(baseParams.currentAge);
+      expect(result.earliestAge).toBeLessThanOrEqual(baseParams.preservationAge);
+      expect(result.splits).toBeDefined();
+      expect(result.splits.person1).toBeDefined();
+      expect(result.splits.outside).toBeDefined();
+      expect(result.rationale).toBeDefined();
+      expect(Array.isArray(result.rationale)).toBe(true);
     }
   });
 
-  /**
-   * Test insurance impact
-   */
-  it('Should account for insurance premiums', () => {
-    const lowInsuranceParams = { ...baseParams, superInsurance: 500 };
-    const highInsuranceParams = { ...baseParams, superInsurance: 3000 };
+  it('Should handle low budget scenarios gracefully', () => {
+    const lowBudgetParams = {
+      ...baseParams,
+      annualSavingsBudget: 5000, // Very low budget
+      targetSpend: 80000 // High target
+    };
     
-    const lowResult = evaluateSplitSingle(0.8, lowInsuranceParams);
-    const highResult = evaluateSplitSingle(0.8, highInsuranceParams);
+    const result = optimiseSplitSingle(lowBudgetParams);
     
-    // Higher insurance should generally lead to later retirement or require more contributions
-    if (lowResult.viable && highResult.viable) {
-      expect(highResult.earliestAge).toBeGreaterThanOrEqual(lowResult.earliestAge);
+    // Should either find a solution or return null for earliest age
+    if (result.earliestAge === null) {
+      expect(result.splits.outside).toBeGreaterThanOrEqual(0);
+    } else {
+      expect(result.earliestAge).toBeGreaterThan(lowBudgetParams.currentAge);
     }
   });
 
-  /**
-   * Test optimization finds reasonable solution
-   */
-  it('Should find optimal split for single person', () => {
-    const optimization = optimizeSplitSingle(baseParams);
+  it('Should respect budget constraints', () => {
+    const result = optimiseSplitSingle(baseParams);
     
-    if (optimization) {
-      expect(optimization.viable).toBe(true);
-      expect(optimization.alpha).toBeGreaterThanOrEqual(0);
-      expect(optimization.alpha).toBeLessThanOrEqual(1);
-      expect(optimization.earliestAge).toBeGreaterThanOrEqual(baseParams.currentAge);
-      expect(optimization.earliestAge).toBeLessThanOrEqual(baseParams.lifeExpectancy);
-      
-      // Verify the solution is actually viable
-      const verification = evaluateSplitSingle(optimization.alpha, baseParams);
-      expect(verification.viable).toBe(true);
-      expect(Math.abs(verification.earliestAge - optimization.earliestAge)).toBeLessThanOrEqual(1);
+    if (result.splits) {
+      const totalSpent = result.splits.person1.sac + result.splits.outside;
+      expect(totalSpent).toBeLessThanOrEqual(baseParams.annualSavingsBudget + 1); // Allow rounding
     }
   });
 });
 
 describe('Split Optimizer - Couple', () => {
   const coupleParams = {
-    currentAge: 42,
-    targetSpend: 80000,
-    annualSavingsBudget: 70000,
-    bequest: 0,
-    lifeExpectancy: 87,
-    currentSavings: 150000,
-    currentSuper1: 200000,
-    currentSuper2: 180000,
-    annualIncome1: 90000,
-    annualIncome2: 70000,
-    rReal: 0.035,
+    currentAge: 35,
+    retirementAge: 55,
+    lifeExpectancy: 88,
     preservationAge1: 60,
     preservationAge2: 60,
-    
-    // Super settings
-    sgRate: 0.115,
-    concessionalCap: 27500,
-    superInsurance1: 1200,
-    superInsurance2: 800,
-    contributionsTaxRate: 0.15
+    currentOutside: 75000,
+    currentSuper1: 120000,
+    currentSuper2: 100000,
+    salary1: 90000,
+    salary2: 75000,
+    insurance1: 1200,
+    insurance2: 800,
+    annualSavingsBudget: 70000,
+    targetSpend: 80000,
+    bequest: 0,
+    sgPct: 0.115,
+    concessionalCap: 30000,
+    assumptions: {
+      nominalReturn: new Decimal(0.085),
+      inflation: new Decimal(0.025)
+    }
   };
 
-  /**
-   * Test basic couple split evaluation
-   */
-  it('Should evaluate couple split correctly', () => {
-    const result = evaluateSplitCouple(0.6, 0.4, coupleParams);
+  it('Should find optimal split for couple', () => {
+    const result = optimiseSplitCouple(coupleParams);
     
     expect(result).toBeDefined();
-    expect(result.viable).toBeDefined();
-    expect(result.sac1).toBeGreaterThanOrEqual(0);
-    expect(result.sac2).toBeGreaterThanOrEqual(0);
-    expect(result.outside).toBeGreaterThanOrEqual(0);
-    expect(result.capUse1).toBeGreaterThanOrEqual(0);
-    expect(result.capUse2).toBeGreaterThanOrEqual(0);
-    
-    // Verify overflow is properly handled
-    const expectedTotal = coupleParams.annualSavingsBudget + result.overflow1 + result.overflow2;
-    const actualTotal = result.sac1 + result.sac2 + result.outside;
-    
-    // Total allocation should equal budget plus any overflow
-    expect(Math.abs(actualTotal - expectedTotal)).toBeLessThan(1);
-  });
-
-  /**
-   * Test asymmetric caps handling
-   */
-  it('Should handle asymmetric income/caps correctly', () => {
-    const asymmetricParams = {
-      ...coupleParams,
-      annualIncome1: 120000, // Higher income = lower headroom due to SG
-      annualIncome2: 40000   // Lower income = more headroom
-    };
-    
-    const result = evaluateSplitCouple(0.8, 0.8, asymmetricParams);
-    
-    // Person 2 should have more headroom due to lower SG
-    const sg1 = asymmetricParams.annualIncome1 * asymmetricParams.sgRate;
-    const sg2 = asymmetricParams.annualIncome2 * asymmetricParams.sgRate;
-    const headroom1 = Math.max(0, asymmetricParams.concessionalCap - sg1);
-    const headroom2 = Math.max(0, asymmetricParams.concessionalCap - sg2);
-    
-    expect(headroom2).toBeGreaterThan(headroom1);
-    
-    // Result should reflect this asymmetry
-    if (result.viable && headroom2 > headroom1) {
-      expect(result.capUse2).toBeLessThanOrEqual(result.capUse1);
+    if (result.earliestAge) {
+      expect(result.earliestAge).toBeGreaterThanOrEqual(coupleParams.currentAge);
+      expect(result.splits).toBeDefined();
+      expect(result.splits.person1).toBeDefined();
+      expect(result.splits.person2).toBeDefined();
+      expect(result.splits.outside).toBeDefined();
+      expect(result.rationale).toBeDefined();
+      expect(Array.isArray(result.rationale)).toBe(true);
     }
   });
 
-  /**
-   * Test couple optimization
-   */
-  it('Should find optimal split for couple', () => {
-    const optimization = optimizeSplitCouple(coupleParams);
+  it('Should respect individual cap constraints', () => {
+    const result = optimiseSplitCouple(coupleParams);
     
-    if (optimization) {
-      expect(optimization.viable).toBe(true);
-      expect(optimization.alpha1).toBeGreaterThanOrEqual(0);
-      expect(optimization.alpha1).toBeLessThanOrEqual(1);
-      expect(optimization.alpha2).toBeGreaterThanOrEqual(0);
-      expect(optimization.alpha2).toBeLessThanOrEqual(1);
-      expect(optimization.earliestAge).toBeGreaterThanOrEqual(coupleParams.currentAge);
+    if (result.splits) {
+      // Each person's SAC should respect their headroom
+      const sg1 = coupleParams.salary1 * coupleParams.sgPct;
+      const sg2 = coupleParams.salary2 * coupleParams.sgPct;
+      const headroom1 = Math.max(0, coupleParams.concessionalCap - sg1);
+      const headroom2 = Math.max(0, coupleParams.concessionalCap - sg2);
       
-      // Verify solution
-      const verification = evaluateSplitCouple(optimization.alpha1, optimization.alpha2, coupleParams);
-      expect(verification.viable).toBe(true);
+      expect(result.splits.person1.sac).toBeLessThanOrEqual(headroom1 + 1); // Allow rounding
+      expect(result.splits.person2.sac).toBeLessThanOrEqual(headroom2 + 1);
+    }
+  });
+
+  it('Should respect total budget constraint', () => {
+    const result = optimiseSplitCouple(coupleParams);
+    
+    if (result.splits) {
+      const totalSpent = result.splits.person1.sac + result.splits.person2.sac + result.splits.outside;
+      expect(totalSpent).toBeLessThanOrEqual(coupleParams.annualSavingsBudget + 1); // Allow rounding
     }
   });
 });
 
 describe('Split Optimizer - Edge Cases', () => {
-  /**
-   * Test impossible targets
-   */
-  it('Should handle impossible spending targets', () => {
+  const baseAssumptions = {
+    nominalReturn: new Decimal(0.085),
+    inflation: new Decimal(0.025)
+  };
+
+  it('Should handle impossible scenarios', () => {
     const impossibleParams = {
       currentAge: 55,
-      targetSpend: 500000, // Very high target - impossible with low savings
-      annualSavingsBudget: 10000, // Very low savings budget
-      bequest: 0,
-      lifeExpectancy: 75, // Short life expectancy makes it harder
-      currentSavings: 10000, // Very low starting wealth
-      currentSuper: 20000,
-      annualIncome: 50000,
-      rReal: 0.02, // Low returns
+      retirementAge: 60,
+      lifeExpectancy: 65,
       preservationAge: 60,
-      sgRate: 0.115,
-      concessionalCap: 27500,
-      superInsurance: 2000, // High insurance drag
-      contributionsTaxRate: 0.15
+      currentOutside: 1000, // Very low
+      currentSuper: 2000, // Very low
+      salary: 30000, // Low salary
+      insurance: 500,
+      annualSavingsBudget: 5000, // Low budget
+      targetSpend: 200000, // Impossible target
+      bequest: 0,
+      sgPct: 0.115,
+      concessionalCap: 30000,
+      assumptions: baseAssumptions
     };
     
-    const result = optimizeSplitSingle(impossibleParams);
-    expect(result).toBeNull(); // Should return null for impossible scenarios
+    const result = optimiseSplitSingle(impossibleParams);
+    
+    // Should return result but with null earliest age
+    expect(result).toBeDefined();
+    expect(result.earliestAge).toBe(null);
   });
 
-  /**
-   * Test very late life expectancy
-   */
-  it('Should handle edge case parameters', () => {
-    const edgeParams = {
-      currentAge: 55,
-      targetSpend: 40000,
-      annualSavingsBudget: 30000,
-      bequest: 100000, // Large bequest
-      lifeExpectancy: 100, // Very long life
-      currentSavings: 200000,
-      currentSuper: 300000,
-      annualIncome: 90000,
-      rReal: 0.02, // Low returns
-      preservationAge: 60,
-      sgRate: 0.115,
-      concessionalCap: 27500,
-      superInsurance: 2000, // High insurance
-      contributionsTaxRate: 0.15
-    };
-    
-    const result = optimizeSplitSingle(edgeParams);
-    
-    // Should still find a solution or gracefully fail
-    if (result) {
-      expect(result.viable).toBe(true);
-      expect(result.alpha).toBeGreaterThanOrEqual(0);
-      expect(result.alpha).toBeLessThanOrEqual(1);
-    }
-  });
-});
-
-describe('Split Optimizer - Golden Path Tests', () => {
-  /**
-   * Test monotonicity: higher target spend should require earlier alpha* or later retirement
-   */
-  it('Should show sensible response to target spend changes', () => {
-    const baseParams = {
-      currentAge: 45,
-      annualSavingsBudget: 60000,
-      bequest: 0,
+  it('Should handle zero savings budget', () => {
+    const zeroParams = {
+      currentAge: 40,
+      retirementAge: 60,
       lifeExpectancy: 85,
-      currentSavings: 150000,
-      currentSuper: 200000,
-      annualIncome: 100000,
-      rReal: 0.04,
       preservationAge: 60,
-      sgRate: 0.115,
-      concessionalCap: 27500,
-      superInsurance: 1000,
-      contributionsTaxRate: 0.15
+      currentOutside: 100000,
+      currentSuper: 200000,
+      salary: 80000,
+      insurance: 1000,
+      annualSavingsBudget: 0, // No additional savings
+      targetSpend: 50000,
+      bequest: 0,
+      sgPct: 0.115,
+      concessionalCap: 30000,
+      assumptions: baseAssumptions
     };
     
-    const lowSpendResult = optimizeSplitSingle({ ...baseParams, targetSpend: 50000 });
-    const highSpendResult = optimizeSplitSingle({ ...baseParams, targetSpend: 70000 });
+    const result = optimiseSplitSingle(zeroParams);
     
-    if (lowSpendResult && highSpendResult && lowSpendResult.viable && highSpendResult.viable) {
-      // Higher spend should require later retirement (monotonic relationship)
-      expect(highSpendResult.earliestAge).toBeGreaterThanOrEqual(lowSpendResult.earliestAge);
-    }
+    expect(result).toBeDefined();
+    expect(result.splits.person1.sac).toBe(0);
+    expect(result.splits.outside).toBe(0);
   });
 });

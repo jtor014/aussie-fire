@@ -1,4 +1,5 @@
-import { optimizeSplitSingle, optimizeSplitCouple } from '../core/optimizer/split_optimizer.js';
+import { optimiseSplitSingle, optimiseSplitCouple } from '../core/optimizer/split_optimizer.js';
+import Decimal from 'decimal.js-light';
 
 /**
  * Generate DWZ strategy recommendations from application state
@@ -31,54 +32,55 @@ export function dwzStrategyFromState(state, rules) {
     superInsurancePremiums = 1000
   } = state;
 
-  // Calculate real return rate
-  const nominalReturn = expectedReturn / 100;
-  const inflation = inflationRate / 100;
-  const rReal = (nominalReturn - inflation) / (1 + inflation);
+  // Calculate return rates for age-band engine
+  const nominalReturn = new Decimal(expectedReturn / 100 || 0.085);
+  const inflation = new Decimal(inflationRate / 100 || 0.025);
   
   // Australian super settings
-  const sgRate = rules.superannuation_guarantee_rate || 0.115; // 11.5% for 2024
-  const concessionalCap = rules.concessional_contribution_cap || 27500; // 2024 cap
-  const contributionsTaxRate = 0.15; // 15% tax on concessional contributions
-  const preservationAge = rules.preservation_age || 60;
+  const sgPct = 0.115; // 11.5% for 2024
+  const concessionalCap = 30000; // 2024-25 cap
+  const preservationAge = 60; // Default preservation age
+  
+  // Build assumptions object
+  const assumptions = { nominalReturn, inflation };
 
   if (planningAs === 'single') {
     return generateSingleStrategy({
       currentAge,
-      targetSpend,
-      annualSavingsBudget,
-      bequest,
+      retirementAge: currentAge + 30, // Placeholder for optimization
       lifeExpectancy,
-      currentSavings,
-      currentSuper,
-      annualIncome,
-      rReal,
       preservationAge,
-      sgRate,
+      currentOutside: currentSavings,
+      currentSuper,
+      salary: annualIncome,
+      insurance: superInsurancePremiums,
+      annualSavingsBudget,
+      targetSpend,
+      bequest,
+      sgPct,
       concessionalCap,
-      superInsurance: superInsurancePremiums,
-      contributionsTaxRate
+      assumptions
     });
   } else {
     return generateCoupleStrategy({
       currentAge,
-      targetSpend,
-      annualSavingsBudget,
-      bequest,
+      retirementAge: currentAge + 30, // Placeholder for optimization
       lifeExpectancy,
-      currentSavings,
+      preservationAge1: preservationAge,
+      preservationAge2: preservationAge,
+      currentOutside: currentSavings,
       currentSuper1: currentSuper,
       currentSuper2: partnerB.currentSuper || 0,
-      annualIncome1: annualIncome,
-      annualIncome2: partnerB.annualIncome || 0,
-      rReal,
-      preservationAge1: preservationAge,
-      preservationAge2: preservationAge, // Assume same for MVP
-      sgRate,
+      salary1: annualIncome,
+      salary2: partnerB.annualIncome || 0,
+      insurance1: superInsurancePremiums,
+      insurance2: partnerB.superInsurancePremiums || 1000,
+      annualSavingsBudget,
+      targetSpend,
+      bequest,
+      sgPct,
       concessionalCap,
-      superInsurance1: superInsurancePremiums,
-      superInsurance2: partnerB.superInsurancePremiums || 1000,
-      contributionsTaxRate
+      assumptions
     });
   }
 }
@@ -87,9 +89,9 @@ export function dwzStrategyFromState(state, rules) {
  * Generate strategy recommendation for single person
  */
 function generateSingleStrategy(params) {
-  const optimization = optimizeSplitSingle(params);
+  const optimization = optimiseSplitSingle(params);
   
-  if (!optimization) {
+  if (!optimization || !optimization.earliestAge) {
     return {
       viable: false,
       message: `Cannot achieve $${params.targetSpend.toLocaleString()}/yr target spend with current savings budget`,
@@ -97,18 +99,11 @@ function generateSingleStrategy(params) {
     };
   }
 
-  const {
-    alpha,
-    earliestAge,
-    sacAmount,
-    outsideAmount,
-    capUse,
-    totalConcessional,
-    overflow
-  } = optimization;
+  const { earliestAge, splits, rationale } = optimization;
+  const { person1, outside } = splits;
 
   // Calculate employer SG contribution for display
-  const sgContribution = params.annualIncome * params.sgRate;
+  const sgContribution = params.salary * params.sgPct;
   
   return {
     viable: true,
@@ -119,34 +114,27 @@ function generateSingleStrategy(params) {
     
     recommendations: {
       salarysacrifice: {
-        amount: Math.round(sacAmount),
-        percentage: Math.round((sacAmount / params.annualSavingsBudget) * 100)
+        amount: person1.sac,
+        percentage: Math.round((person1.sac / params.annualSavingsBudget) * 100)
       },
       outsideInvestment: {
-        amount: Math.round(outsideAmount),
-        percentage: Math.round((outsideAmount / params.annualSavingsBudget) * 100)
+        amount: outside,
+        percentage: Math.round((outside / params.annualSavingsBudget) * 100)
       },
       totalBudget: params.annualSavingsBudget
     },
     
     capAnalysis: {
       employerSG: Math.round(sgContribution),
-      salarysacrifice: Math.round(sacAmount),
-      totalConcessional: Math.round(totalConcessional),
+      salarysacrifice: person1.sac,
+      totalConcessional: Math.round(sgContribution + person1.sac),
       concessionalCap: params.concessionalCap,
-      capUtilization: Math.round(capUse * 100),
-      overflow: Math.round(overflow),
-      hasOverflow: overflow > 100 // Meaningful overflow threshold
+      capUtilization: person1.capUsePct,
+      overflow: Math.max(0, params.annualSavingsBudget - person1.sac - outside),
+      hasOverflow: (params.annualSavingsBudget - person1.sac - outside) > 100
     },
     
-    rationale: generateRationale({
-      alpha,
-      earliestAge,
-      capUse,
-      overflow,
-      targetSpend: params.targetSpend,
-      preservationAge: params.preservationAge
-    })
+    rationale: rationale || []
   };
 }
 
@@ -154,9 +142,9 @@ function generateSingleStrategy(params) {
  * Generate strategy recommendation for couple
  */
 function generateCoupleStrategy(params) {
-  const optimization = optimizeSplitCouple(params);
+  const optimization = optimiseSplitCouple(params);
   
-  if (!optimization) {
+  if (!optimization || !optimization.earliestAge) {
     return {
       viable: false,
       message: `Cannot achieve $${params.targetSpend.toLocaleString()}/yr target spend with current savings budget`,
@@ -164,22 +152,12 @@ function generateCoupleStrategy(params) {
     };
   }
 
-  const {
-    alpha1,
-    alpha2,
-    earliestAge,
-    sac1,
-    sac2,
-    outside,
-    capUse1,
-    capUse2,
-    overflow1,
-    overflow2
-  } = optimization;
+  const { earliestAge, splits, rationale } = optimization;
+  const { person1, person2, outside } = splits;
 
   // Calculate employer SG contributions
-  const sgContrib1 = params.annualIncome1 * params.sgRate;
-  const sgContrib2 = params.annualIncome2 * params.sgRate;
+  const sgContrib1 = params.salary1 * params.sgPct;
+  const sgContrib2 = params.salary2 * params.sgPct;
   
   return {
     viable: true,
@@ -190,15 +168,15 @@ function generateCoupleStrategy(params) {
     
     recommendations: {
       person1: {
-        salarysacrifice: Math.round(sac1),
-        capUtilization: Math.round(capUse1 * 100)
+        salarysacrifice: person1.sac,
+        capUtilization: person1.capUsePct
       },
       person2: {
-        salarysacrifice: Math.round(sac2), 
-        capUtilization: Math.round(capUse2 * 100)
+        salarysacrifice: person2.sac, 
+        capUtilization: person2.capUsePct
       },
       outsideInvestment: {
-        amount: Math.round(outside),
+        amount: outside,
         percentage: Math.round((outside / params.annualSavingsBudget) * 100)
       },
       totalBudget: params.annualSavingsBudget
@@ -207,88 +185,25 @@ function generateCoupleStrategy(params) {
     capAnalysis: {
       person1: {
         employerSG: Math.round(sgContrib1),
-        salarysacrifice: Math.round(sac1),
-        totalConcessional: Math.round(sgContrib1 + sac1),
-        capUtilization: Math.round(capUse1 * 100),
-        overflow: Math.round(overflow1)
+        salarysacrifice: person1.sac,
+        totalConcessional: Math.round(sgContrib1 + person1.sac),
+        capUtilization: person1.capUsePct,
+        overflow: Math.max(0, (params.annualSavingsBudget * 0.5) - person1.sac)
       },
       person2: {
         employerSG: Math.round(sgContrib2),
-        salarysacrifice: Math.round(sac2),
-        totalConcessional: Math.round(sgContrib2 + sac2),
-        capUtilization: Math.round(capUse2 * 100),
-        overflow: Math.round(overflow2)
+        salarysacrifice: person2.sac,
+        totalConcessional: Math.round(sgContrib2 + person2.sac),
+        capUtilization: person2.capUsePct,
+        overflow: Math.max(0, (params.annualSavingsBudget * 0.5) - person2.sac)
       },
       concessionalCap: params.concessionalCap
     },
     
-    rationale: generateCoupleRationale({
-      alpha1,
-      alpha2,
-      earliestAge,
-      capUse1,
-      capUse2,
-      targetSpend: params.targetSpend,
-      preservationAge1: params.preservationAge1,
-      preservationAge2: params.preservationAge2
-    })
+    rationale: rationale || []
   };
 }
 
-/**
- * Generate explanation of why this split is recommended
- */
-function generateRationale({ alpha, earliestAge, capUse, overflow, targetSpend, preservationAge }) {
-  const reasons = [];
-  
-  // Main optimization result
-  reasons.push(`This allocation enables retirement at age ${earliestAge} for $${targetSpend.toLocaleString()}/yr spending.`);
-  
-  // Cap utilization insights
-  if (capUse > 0.9) {
-    reasons.push('Your concessional cap is nearly fully utilized, maximizing tax-advantaged super growth.');
-  } else if (capUse < 0.5) {
-    reasons.push('You have significant unused concessional cap space for additional tax benefits.');
-  }
-  
-  // Overflow handling
-  if (overflow > 1000) {
-    reasons.push(`$${Math.round(overflow).toLocaleString()} exceeds your cap and flows to outside investments.`);
-  }
-  
-  // Phase-specific insights
-  if (earliestAge < preservationAge) {
-    reasons.push('Early retirement relies on outside investments during the bridge period to age 60.');
-  } else {
-    reasons.push('Retirement timing allows immediate access to superannuation benefits.');
-  }
-  
-  return reasons;
-}
-
-/**
- * Generate explanation for couple's split recommendation
- */
-function generateCoupleRationale({ alpha1, alpha2, earliestAge, capUse1, capUse2, targetSpend, preservationAge1, preservationAge2 }) {
-  const reasons = [];
-  
-  reasons.push(`This allocation enables joint retirement at age ${earliestAge} for $${targetSpend.toLocaleString()}/yr household spending.`);
-  
-  // Compare cap utilization between partners
-  if (Math.abs(capUse1 - capUse2) > 0.2) {
-    const higherPartner = capUse1 > capUse2 ? 1 : 2;
-    const lowerPartner = capUse1 > capUse2 ? 2 : 1;
-    reasons.push(`Person ${higherPartner} has higher cap utilization, while Person ${lowerPartner} has more headroom.`);
-  }
-  
-  // Preservation age differences
-  if (preservationAge1 !== preservationAge2) {
-    const earlierAge = Math.min(preservationAge1, preservationAge2);
-    reasons.push(`Optimization accounts for different preservation ages, with super access beginning at ${earlierAge}.`);
-  }
-  
-  return reasons;
-}
 
 /**
  * Get display-ready strategy data for UI components

@@ -42,8 +42,8 @@ export function kpisFromState(state, rules) {
     inflationRate = 2.5,
     adjustForInflation = true,
     
-    // Mode flags
-    dieWithZeroMode = false,
+    // Mode flags (T-015: DWZ-only mode)
+    dieWithZeroMode = true,
     planningAs = 'single',
     
     // Partner data (couples mode)
@@ -131,7 +131,8 @@ export function kpisFromState(state, rules) {
   let earliestFireAge = null;
   let bindingConstraint = null;
   
-  if (dieWithZeroMode) {
+  // T-015: Always compute DWZ values (DWZ-only mode)
+  {
     // Use simple annuity calculation for predictable life expectancy reactivity
     const retirementYears = lifeExpectancy - retirementAge;
     if (retirementYears > 0 && !isAlreadyRetired) {
@@ -184,20 +185,28 @@ export function kpisFromState(state, rules) {
   }
   
   // === Bridge Period Assessment ===
+  // T-015: Always use earliest fire age if available (DWZ-only mode)
+  const effectiveRetirementAge = earliestFireAge || retirementAge;
+  
   const bridgeAssessment = assessBridge({
     currentAge,
-    retirementAge,
+    retirementAge: effectiveRetirementAge,
     preservationAge: rules.preservation_age || 60,
     currentOutsideSuper: currentSavings,
     annualOutsideSavings: Math.max(0, annualSavings),
-    annualExpenseNeed: dieWithZeroMode ? sustainableSpend : annualExpenses,
+    annualExpenseNeed: sustainableSpend,
     returnRate,
-    dieWithZero: dieWithZeroMode,
+    dieWithZero: true,
     spendToZeroAnnual: sustainableSpend
   });
   
   // === Annual Savings Rate ===
   const savingsRate = annualIncome > 0 ? (annualSavings / annualIncome) * 100 : 0;
+  
+  // === Bridge Years Calculation (T-015) ===
+  const preservationAge = rules.preservation_age || 60;
+  const bridgeYears = Math.max(0, preservationAge - effectiveRetirementAge);
+  const yearsToFreedom = Math.max(0, effectiveRetirementAge - currentAge);
   
   // === Return Complete KPI Tuple ===
   return {
@@ -224,6 +233,8 @@ export function kpisFromState(state, rules) {
     
     // Bridge metrics
     bridgeAssessment,
+    bridgeYears,
+    yearsToFreedom,
     
     // Investment metrics
     realReturn,
