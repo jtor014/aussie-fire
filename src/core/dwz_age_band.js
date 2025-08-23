@@ -96,7 +96,7 @@ export function analyzeBindingConstraint(p) {
 }
 
 /**
- * Solve for sustainable spending amount using age-band multipliers
+ * Solve for sustainable spending amount using custom bands
  * @param {Object} params - Parameters object
  * @param {number} params.retirementAge - Target retirement age
  * @param {number} params.lifeExpectancy - Life expectancy
@@ -105,6 +105,7 @@ export function analyzeBindingConstraint(p) {
  * @param {number} params.preservationAge - Super preservation age
  * @param {Decimal} params.realReturn - Real return rate (as decimal)
  * @param {Decimal} params.bequest - Desired bequest amount
+ * @param {Array} params.bands - Custom spending bands (optional, defaults to auto-generated)
  * @returns {Object} Solution with {sustainableAnnual, bands, iterations}
  */
 export function solveSustainableSpending({
@@ -114,10 +115,11 @@ export function solveSustainableSpending({
   superWealth,
   preservationAge,
   realReturn,
-  bequest = new Decimal(0)
+  bequest = new Decimal(0),
+  bands: customBands
 }) {
-  // Generate spending bands
-  const bands = bandScheduleFor(retirementAge, lifeExpectancy);
+  // Use custom bands if provided, otherwise generate default bands
+  const bands = customBands || bandScheduleFor(retirementAge, lifeExpectancy);
   
   if (bands.length === 0) {
     return {
@@ -218,6 +220,7 @@ function evaluateConstraints(sustainableSpending, bands, {
  * @param {number} params.preservationAge - Super preservation age
  * @param {Decimal} params.bequest - Desired bequest
  * @param {Decimal} params.minSpending - Minimum acceptable spending
+ * @param {Function} params.bandsGenerator - Function to generate bands for a given retirement age
  * @returns {Object} {earliestAge, sustainableSpending} or {null, 0} if not achievable
  */
 export function findEarliestRetirement({
@@ -232,7 +235,8 @@ export function findEarliestRetirement({
   lifeExpectancy,
   preservationAge,
   bequest,
-  minSpending = new Decimal(0)
+  minSpending = new Decimal(0),
+  bandsGenerator
 }) {
   const realReturn = nominalReturn.sub(inflation).div(inflation.add(1));
   
@@ -259,6 +263,9 @@ export function findEarliestRetirement({
       }
     }
     
+    // Generate bands for this retirement age
+    const bands = bandsGenerator ? bandsGenerator(retirementAge) : null;
+    
     // Solve for sustainable spending at this retirement age
     const solution = solveSustainableSpending({
       retirementAge,
@@ -267,7 +274,8 @@ export function findEarliestRetirement({
       superWealth: futureSuper,
       preservationAge,
       realReturn,
-      bequest
+      bequest,
+      bands
     });
     
     // Check if this retirement age is viable
