@@ -147,7 +147,7 @@ export function AdvancedDrawer({
           >
             <div>
               <div style={{ fontWeight: '600', fontSize: '16px', color: '#1f2937' }}>
-                📊 Income Shape (DWZ)
+                📊 Income Shape
               </div>
               {!expandedSections.incomeShape && (
                 <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
@@ -313,7 +313,7 @@ export function AdvancedDrawer({
           >
             <div>
               <div style={{ fontWeight: '600', fontSize: '16px', color: '#1f2937' }}>
-                📈 Market Assumptions & Returns
+                📈 Market Assumptions
               </div>
               {!expandedSections.marketAssumptions && (
                 <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>
@@ -384,7 +384,7 @@ export function AdvancedDrawer({
           >
             <div>
               <div style={{ fontWeight: '600', fontSize: '16px', color: '#1f2937' }}>
-                🎯 Manual Strategy Overrides
+                🎯 Manual Overrides
               </div>
               {!expandedSections.strategyOverrides && (
                 <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '4px' }}>

@@ -33,7 +33,8 @@
       "Bash(npm version:*)",
       "Bash(git merge:*)",
       "Bash(gh pr checks:*)",
-      "Bash(gh pr view:*)"
+      "Bash(gh pr view:*)",
+      "Bash(gh pr comment:*)"
     ],
     "deny": [],
     "ask": []
