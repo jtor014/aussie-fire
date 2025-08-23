@@ -1,6 +1,6 @@
 import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz_single.js';
 import { computeDwzStepped, isSteppedPlanViable, earliestFireAgeSteppedDWZ, getSteppedConstraint } from '../core/dwz_stepped.js';
-import { solveSustainableSpending, findEarliestRetirement, checkConstraintViolations } from '../core/dwz_age_band.js';
+import { solveSustainableSpending, findEarliestRetirement, checkConstraintViolations, analyzeBindingConstraint, makeBandAtAge } from '../core/dwz_age_band.js';
 import Decimal from 'decimal.js-light';
 
 /**
@@ -146,6 +146,22 @@ export function decisionFromState(state, rules) {
     S_post = solution.sustainableAnnual.mul(postBand.multiplier);
   }
 
+  // T-017: Analyze binding constraint at earliest age
+  let constraint = null;
+  if (earliestResult.earliestAge && solution.sustainableAnnual.gt(0)) {
+    const bandAtAge = makeBandAtAge(bands);
+    constraint = analyzeBindingConstraint({
+      R: earliestResult.earliestAge,
+      L: lifeExpectancy,
+      preservationAge: P,
+      realReturn: realReturn.toNumber(),
+      bandAtAge,
+      outsideNow: outsideWealth.toNumber(),
+      superAtPreservation: superWealth.toNumber(),
+      sustainableAnnual: solution.sustainableAnnual.toNumber(),
+    });
+  }
+
   return {
     canRetireAtTarget,
     targetAge,
@@ -160,7 +176,9 @@ export function decisionFromState(state, rules) {
       // Backward compatibility
       S_pre: S_pre.toNumber(),
       S_post: S_post.toNumber(),
-      planSpend: S_pre.gt(S_post) ? S_pre.toNumber() : S_post.toNumber()
+      planSpend: S_pre.gt(S_post) ? S_pre.toNumber() : S_post.toNumber(),
+      // T-017: Binding constraint analysis
+      constraint
     },
     bequest,
     preservationAge: P,

@@ -5,6 +5,63 @@ All notable changes to the Australian FIRE Calculator project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-08-23
+
+### Major Changes - T-016: DWZ-Only Polish
+- **Age-Band Spending**: Implemented sophisticated age-band aware spending patterns (go-go/slow-go/no-go phases)
+- **Enhanced Depletion Charts**: Charts now show realistic spending transitions at ages 60 and 75
+- **Improved Formatting**: Added thousand separators to bridge funding displays
+- **Unified UI**: Removed legacy couple-specific results panels
+
+### Added
+- **Age-Band Multipliers**: Go-go (1.10×), slow-go (1.00×), and no-go (0.85×) spending multipliers
+- **Age-Band Transition Markers**: Chart markers at ages 60 (slow-go) and 75 (no-go) 
+- **Comprehensive Test Suite**: 25+ new tests for age-band depletion paths and bequest functionality
+- **Bridge Chip Formatting**: Proper thousand separator formatting (e.g., "1,250k" instead of "1250k")
+
+### Changed
+- **Depletion Path Generator**: Now uses age-band multipliers instead of simple pre/post spending
+- **GlobalBanner**: Shows single sustainable spending amount instead of stepped amounts
+- **Chart Annotations**: Enhanced with age-band transition indicators and spending level changes
+- **Test Structure**: Updated decision logic tests for DWZ-only mode
+
+### Technical
+- Created `src/core/age_bands.js` with age-band spending system
+- Enhanced `src/selectors/depletion.js` with backward compatibility for legacy parameters
+- Added comprehensive test files: `tests/age-band-depletion.test.js`, `tests/chart-markers.test.js`, `tests/bequest-target.test.js`
+- Improved age-band boundary logic to handle overlapping ranges correctly
+
+## [0.3.0] - 2025-08-23
+
+### Major Changes - T-015: DWZ-Only UX
+- **BREAKING**: Completely removed legacy target-age flow - DWZ methodology is now the only retirement planning mode
+- **BREAKING**: Removed pinned retirement age controls and DWZ planning mode toggles
+
+### Added
+- **Earliest FIRE Focus**: UI now centers around earliest possible retirement age
+- **Simplified State Management**: Removed dwzPlanningMode and pinnedRetirementAge from application state
+- **Enhanced Chart Markers**: Shows only Earliest FIRE, Super unlock, and Life Expectancy markers
+- **Backward Compatibility**: URL shims handle legacy dwzPlanningMode parameters
+
+### Changed
+- **Unified Results Display**: Single results panel for both single and couple modes
+- **Simplified KPI Calculations**: Always use earliest age logic instead of slider-based retirement age
+- **Chart Simplification**: Removed confusing "Retirement" and "Target" markers
+- **GlobalBanner Updates**: Always shows earliest retirement age with sustainable spending
+
+### Removed
+- DWZ Planning Mode radio buttons (Earliest FIRE vs Pin Age)
+- Pin age slider controls in PersonSituationCard
+- Red "Cannot retire at earliest target" warning panels
+- Legacy retirement age sliders and target-based calculations
+- Mode-switching logic throughout the application
+
+### Technical
+- Updated `src/selectors/decision.js` to always use earliest age calculation
+- Simplified `src/selectors/kpis.js` by removing mode-dependent logic
+- Created comprehensive test suite in `tests/ux-dwz-only.test.js`
+- Enhanced chart marker generation with age-band transition support
+
 ## [0.2.0] - 2025-08-22
 
 ### Major Changes - T-010: DWZ-Only Mode
