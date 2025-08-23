@@ -1,6 +1,7 @@
 import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz_single.js';
 import { computeDwzStepped, isSteppedPlanViable, earliestFireAgeSteppedDWZ, getSteppedConstraint } from '../core/dwz_stepped.js';
 import { solveSustainableSpending, findEarliestRetirement, checkConstraintViolations, analyzeBindingConstraint, makeBandAtAge } from '../core/dwz_age_band.js';
+import { normalizeBandSettings, createFlatSchedule, createAgeBandedSchedule } from '../lib/validation/ageBands.js';
 import Decimal from 'decimal.js-light';
 
 /**
@@ -19,7 +20,16 @@ export function decisionFromState(state, rules) {
     retirementAge,
     annualExpenses,
     lifeExpectancy,
-    bequest = 0
+    bequest = 0,
+    // T-018: Age-band toggle settings
+    ageBandsEnabled = true,
+    ageBandSettings = {
+      gogoTo: 60,
+      slowTo: 75, 
+      gogoMult: 1.10,
+      slowMult: 1.00,
+      nogoMult: 0.85
+    }
   } = state;
 
   // Calculate return rates
@@ -29,6 +39,24 @@ export function decisionFromState(state, rules) {
 
   // Preservation age - use default 60 for now (can be enhanced later for age-specific lookup)
   const P = 60;
+
+  // T-018: Generate bands based on toggle setting
+  let bands = [];
+  let bandWarnings = [];
+  
+  if (ageBandsEnabled) {
+    // Validate and normalize band settings
+    const normalized = normalizeBandSettings({
+      R: retirementAge,
+      L: lifeExpectancy, 
+      settings: ageBandSettings
+    });
+    bandWarnings = normalized.warnings;
+    bands = createAgeBandedSchedule(retirementAge, lifeExpectancy, normalized.settings);
+  } else {
+    // Flat schedule - all spending at 1.00x multiplier
+    bands = createFlatSchedule(retirementAge, lifeExpectancy);
+  }
 
   // Calculate wealth at retirement age
   function getWealthAtAge(targetAge) {
@@ -68,7 +96,21 @@ export function decisionFromState(state, rules) {
     return { outsideWealth: W_out, superWealth: W_sup };
   }
 
-  // Find earliest retirement using age-band engine
+  // T-018: Create bands generator function
+  const bandsGenerator = (retirementAge) => {
+    if (ageBandsEnabled) {
+      const normalized = normalizeBandSettings({
+        R: retirementAge,
+        L: lifeExpectancy,
+        settings: ageBandSettings
+      });
+      return createAgeBandedSchedule(retirementAge, lifeExpectancy, normalized.settings);
+    } else {
+      return createFlatSchedule(retirementAge, lifeExpectancy);
+    }
+  };
+
+  // Find earliest retirement using custom bands
   const earliestResult = findEarliestRetirement({
     currentAge: state.currentAge,
     maxRetirementAge: Math.min(P, lifeExpectancy - 5), // Don't retire too close to death
@@ -81,7 +123,8 @@ export function decisionFromState(state, rules) {
     lifeExpectancy,
     preservationAge: P,
     bequest: new Decimal(bequest),
-    minSpending: new Decimal(annualExpenses)
+    minSpending: new Decimal(annualExpenses),
+    bandsGenerator
   });
 
   // T-015: Always use earliest age (no pinned mode)
@@ -90,7 +133,7 @@ export function decisionFromState(state, rules) {
   // Get wealth at target age
   const { outsideWealth, superWealth } = getWealthAtAge(targetAge);
 
-  // Solve sustainable spending at target age
+  // Solve sustainable spending at target age with custom bands
   const solution = solveSustainableSpending({
     retirementAge: targetAge,
     lifeExpectancy,
@@ -98,7 +141,8 @@ export function decisionFromState(state, rules) {
     superWealth,
     preservationAge: P,
     realReturn,
-    bequest: new Decimal(bequest)
+    bequest: new Decimal(bequest),
+    bands: bands // T-018: Pass custom bands (flat or age-banded)
   });
 
   // Check if viable at target spending level
@@ -130,18 +174,18 @@ export function decisionFromState(state, rules) {
 
   // Generate backward-compatible S_pre and S_post values
   // For age bands, we approximate by using band multipliers
-  const bands = solution.bands;
+  const solutionBands = solution.bands;
   let S_pre = solution.sustainableAnnual;
   let S_post = solution.sustainableAnnual;
 
   // Find representative spending for pre-super (bridge) period
-  const bridgeBand = bands.find(band => band.startAge < P && band.endAge > targetAge);
+  const bridgeBand = solutionBands.find(band => band.startAge < P && band.endAge > targetAge);
   if (bridgeBand) {
     S_pre = solution.sustainableAnnual.mul(bridgeBand.multiplier);
   }
 
   // Find representative spending for post-super period  
-  const postBand = bands.find(band => band.startAge >= P);
+  const postBand = solutionBands.find(band => band.startAge >= P);
   if (postBand) {
     S_post = solution.sustainableAnnual.mul(postBand.multiplier);
   }
@@ -149,7 +193,7 @@ export function decisionFromState(state, rules) {
   // T-017: Analyze binding constraint at earliest age
   let constraint = null;
   if (earliestResult.earliestAge && solution.sustainableAnnual.gt(0)) {
-    const bandAtAge = makeBandAtAge(bands);
+    const bandAtAge = makeBandAtAge(solutionBands);
     constraint = analyzeBindingConstraint({
       R: earliestResult.earliestAge,
       L: lifeExpectancy,
@@ -169,10 +213,10 @@ export function decisionFromState(state, rules) {
     shortfallPhase,
     kpis: {
       sustainableAnnual: solution.sustainableAnnual.toNumber(),
-      bands: bands.map(band => ({
+      bands: ageBandsEnabled ? bands.map(band => ({
         ...band,
-        multiplier: band.multiplier.toNumber()
-      })),
+        multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber()
+      })) : [], // T-018: Empty bands array when flat mode
       // Backward compatibility
       S_pre: S_pre.toNumber(),
       S_post: S_post.toNumber(),
@@ -185,7 +229,10 @@ export function decisionFromState(state, rules) {
     constraintAtEarliest: earliestResult.earliestAge ? {
       bridgeViable: constraints.bridgeViable,
       postViable: constraints.postViable
-    } : null
+    } : null,
+    // T-018: Age-band settings and warnings
+    ageBandsEnabled,
+    bandWarnings
   };
 }
 

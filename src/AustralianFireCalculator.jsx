@@ -12,6 +12,7 @@ import { mkPartner, mkHousehold } from './models/shapes';
 import { projectCouple } from './core/household';
 import { dwzPersonFromState, maxSpendDWZCouple, earliestFireAgeDWZCouple, getCoupleAtRetirementBalances } from './core/dwz_couples.js';
 import { GlobalBanner } from './components/GlobalBanner.jsx';
+import { formatCurrencyCompact } from './lib/formatNumber.js';
 
 // === DWZ helpers (real dollars) ===
 const EPS = 1e-6;
@@ -323,6 +324,16 @@ const AustralianFireCalculator = () => {
   const [showInTodaysDollars, setShowInTodaysDollars] = useState(true);
   const [hecsDebt, setHecsDebt] = useState(0);
   const [hasPrivateHealth, setHasPrivateHealth] = useState(false);
+  
+  // T-018: Age-band settings
+  const [ageBandsEnabled, setAgeBandsEnabled] = useState(true); // Default ON (current behavior)
+  const [ageBandSettings, setAgeBandSettings] = useState({
+    gogoTo: 60,    // Go-go ends at age 60
+    slowTo: 75,    // Slow-go ends at age 75  
+    gogoMult: 1.10, // Go-go multiplier 110%
+    slowMult: 1.00, // Slow-go multiplier 100%
+    nogoMult: 0.85  // No-go multiplier 85%
+  });
 
   // Planning mode
   const [planningAs, setPlanningAs] = useState('single'); // 'single' | 'couple'
@@ -499,6 +510,15 @@ const AustralianFireCalculator = () => {
     setHasInsuranceInSuper(false);
     setInsurancePremiums({ life: 0, tpd: 0, income: 0 });
     setShowItemizedInsurance(false);
+    // T-018: Reset age-band settings
+    setAgeBandsEnabled(true);
+    setAgeBandSettings({
+      gogoTo: 60,
+      slowTo: 75,
+      gogoMult: 1.10,
+      slowMult: 1.00,
+      nogoMult: 0.85
+    });
     alert('Reset to default settings! 🔄');
   };
 
@@ -533,6 +553,17 @@ const AustralianFireCalculator = () => {
         tpd: parseFloat(urlParams.get('insTpd')) || 0,
         income: parseFloat(urlParams.get('insIncome')) || 0
       });
+      // T-018: Load age-band settings from URL
+      setAgeBandsEnabled(urlParams.get('ageBands') !== '0');
+      if (urlParams.has('gogoTo')) {
+        setAgeBandSettings({
+          gogoTo: parseInt(urlParams.get('gogoTo')) || 60,
+          slowTo: parseInt(urlParams.get('slowTo')) || 75,
+          gogoMult: parseFloat(urlParams.get('gogoMult')) || 1.10,
+          slowMult: parseFloat(urlParams.get('slowMult')) || 1.00,
+          nogoMult: parseFloat(urlParams.get('nogoMult')) || 0.85
+        });
+      }
     }
   }, []);
 
@@ -689,7 +720,10 @@ const AustralianFireCalculator = () => {
       adjustForInflation,
       dieWithZeroMode,
       planningAs,
-      partnerB
+      partnerB,
+      // T-018: Age-band settings
+      ageBandsEnabled,
+      ageBandSettings
     };
     
     return kpisFromState(state, auRules);
@@ -700,7 +734,9 @@ const AustralianFireCalculator = () => {
     hasInsuranceInSuper, insurancePremiums,
     expectedReturn, investmentFees,
     inflationRate, adjustForInflation, dieWithZeroMode,
-    planningAs, partnerB
+    planningAs, partnerB,
+    // T-018: Age-band dependencies
+    ageBandsEnabled, ageBandSettings
   ]);
 
   // Unified decision logic for all UI components
@@ -725,7 +761,10 @@ const AustralianFireCalculator = () => {
       adjustForInflation,
       dieWithZeroMode,
       planningAs,
-      partnerB
+      partnerB,
+      // T-018: Age-band settings
+      ageBandsEnabled,
+      ageBandSettings
     };
     
     return decisionFromState(state, auRules);
@@ -736,7 +775,9 @@ const AustralianFireCalculator = () => {
     hasInsuranceInSuper, insurancePremiums,
     expectedReturn, investmentFees,
     inflationRate, adjustForInflation, dieWithZeroMode,
-    planningAs, partnerB
+    planningAs, partnerB,
+    // T-018: Age-band dependencies
+    ageBandsEnabled, ageBandSettings
   ]);
 
   // Display-ready decision data
@@ -1328,6 +1369,238 @@ const AustralianFireCalculator = () => {
 
       {/* Results Box - PayCalculator Style (prominent placement) */}
       {/* Results section will be moved here for better UX */}
+
+      {/* T-018: DWZ Income Shape Settings */}
+      <div style={{ 
+        ...sectionStyle, 
+        border: '2px solid #059669', 
+        backgroundColor: '#f0fdf4',
+        transition: 'all 0.3s ease'
+      }}>
+        <div style={{ marginBottom: '20px' }}>
+          <h3 style={{ color: '#047857', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            Income Shape
+            <span style={{ 
+              backgroundColor: '#059669', 
+              color: 'white', 
+              fontSize: '10px', 
+              padding: '2px 6px', 
+              borderRadius: '4px', 
+              fontWeight: '500' 
+            }}>
+              DWZ
+            </span>
+          </h3>
+          <div style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic', marginTop: '4px' }}>
+            Choose between flat or age-banded spending patterns
+          </div>
+        </div>
+
+        {/* Income shape toggle */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '8px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                checked={!ageBandsEnabled}
+                onChange={() => setAgeBandsEnabled(false)}
+                style={{ marginRight: '8px' }}
+              />
+              <span style={{ fontWeight: '600' }}>Flat</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+              <input
+                type="radio"
+                checked={ageBandsEnabled}
+                onChange={() => setAgeBandsEnabled(true)}
+                style={{ marginRight: '8px' }}
+              />
+              <span style={{ fontWeight: '600' }}>Age-banded (recommended)</span>
+            </label>
+          </div>
+          {ageBandsEnabled && (
+            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+              Use higher spending earlier (Go-go), taper later. Edit ages and multipliers in Advanced below.
+            </div>
+          )}
+        </div>
+
+        {/* Advanced editor - only show when age-banded is enabled */}
+        {ageBandsEnabled && (
+          <div style={{ 
+            backgroundColor: '#ffffff',
+            border: '1px solid #d1d5db',
+            borderRadius: '8px',
+            padding: '16px',
+          }}>
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: '16px' 
+            }}>
+              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                Advanced Band Settings
+              </h4>
+              <button
+                onClick={() => setAgeBandSettings({
+                  gogoTo: 60,
+                  slowTo: 75,
+                  gogoMult: 1.10,
+                  slowMult: 1.00,
+                  nogoMult: 0.85
+                })}
+                style={{ 
+                  ...buttonStyle, 
+                  backgroundColor: '#6b7280',
+                  fontSize: '11px',
+                  padding: '4px 8px'
+                }}
+              >
+                Restore defaults
+              </button>
+            </div>
+
+            {/* Show warnings if any */}
+            {decision.bandWarnings && decision.bandWarnings.length > 0 && (
+              <div style={{
+                backgroundColor: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '6px',
+                padding: '8px',
+                marginBottom: '12px',
+                fontSize: '12px'
+              }}>
+                {decision.bandWarnings.map((warning, i) => (
+                  <div key={i} style={{ color: '#92400e' }}>⚠️ {warning}</div>
+                ))}
+              </div>
+            )}
+
+            {/* Band settings rows */}
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {/* Go-go phase */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
+                    Go-go ends at age
+                  </label>
+                  <input
+                    type="number"
+                    min={currentAge}
+                    max={lifeExpectancy - 2}
+                    value={ageBandSettings.gogoTo}
+                    onChange={(e) => setAgeBandSettings(prev => ({
+                      ...prev,
+                      gogoTo: parseInt(e.target.value) || 60
+                    }))}
+                    style={{ ...inputStyle, fontSize: '13px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
+                    Multiplier (×)
+                  </label>
+                  <input
+                    type="number"
+                    min="0.50"
+                    max="1.50"
+                    step="0.05"
+                    value={ageBandSettings.gogoMult}
+                    onChange={(e) => setAgeBandSettings(prev => ({
+                      ...prev,
+                      gogoMult: parseFloat(e.target.value) || 1.10
+                    }))}
+                    style={{ ...inputStyle, fontSize: '13px' }}
+                  />
+                </div>
+                <div style={{ fontSize: '11px', color: '#6b7280', paddingBottom: '8px' }}>
+                  Go-go years
+                </div>
+              </div>
+
+              {/* Slow-go phase */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
+                    Slow-go ends at age
+                  </label>
+                  <input
+                    type="number"
+                    min={ageBandSettings.gogoTo + 1}
+                    max={lifeExpectancy - 1}
+                    value={ageBandSettings.slowTo}
+                    onChange={(e) => setAgeBandSettings(prev => ({
+                      ...prev,
+                      slowTo: parseInt(e.target.value) || 75
+                    }))}
+                    style={{ ...inputStyle, fontSize: '13px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
+                    Multiplier (×)
+                  </label>
+                  <input
+                    type="number"
+                    min="0.50"
+                    max="1.50"
+                    step="0.05"
+                    value={ageBandSettings.slowMult}
+                    onChange={(e) => setAgeBandSettings(prev => ({
+                      ...prev,
+                      slowMult: parseFloat(e.target.value) || 1.00
+                    }))}
+                    style={{ ...inputStyle, fontSize: '13px' }}
+                  />
+                </div>
+                <div style={{ fontSize: '11px', color: '#6b7280', paddingBottom: '8px' }}>
+                  Slow-go years
+                </div>
+              </div>
+
+              {/* No-go phase */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', alignItems: 'end' }}>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
+                    No-go ends at life expectancy
+                  </label>
+                  <div style={{ 
+                    ...inputStyle, 
+                    backgroundColor: '#f9fafb', 
+                    color: '#6b7280',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}>
+                    {lifeExpectancy}
+                  </div>
+                </div>
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
+                    Multiplier (×)
+                  </label>
+                  <input
+                    type="number"
+                    min="0.50"
+                    max="1.50"
+                    step="0.05"
+                    value={ageBandSettings.nogoMult}
+                    onChange={(e) => setAgeBandSettings(prev => ({
+                      ...prev,
+                      nogoMult: parseFloat(e.target.value) || 0.85
+                    }))}
+                    style={{ ...inputStyle, fontSize: '13px' }}
+                  />
+                </div>
+                <div style={{ fontSize: '11px', color: '#6b7280', paddingBottom: '8px' }}>
+                  No-go years
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Assumptions Panel */}
       <div style={{ 
@@ -2254,10 +2527,10 @@ const AustralianFireCalculator = () => {
                       Bridge to Age 60: {calculations.bridgePeriodFeasible ? 'Covered' : 'Short'}
                     </div>
                     <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                      Need ${(calculations.bridgePeriodDetails.fundsNeeded/1000).toFixed(0)}k outside super for {calculations.bridgePeriodDetails.bridgeYears} years
+                      Need {formatCurrencyCompact(calculations.bridgePeriodDetails.fundsNeeded)} outside super for {calculations.bridgePeriodDetails.bridgeYears} years
                       {calculations.bridgePeriodFeasible 
-                        ? ` (have ${(calculations.bridgePeriodDetails.fundsAvailable/1000).toFixed(0)}k)`
-                        : ` (only have ${(calculations.bridgePeriodDetails.fundsAvailable/1000).toFixed(0)}k)`
+                        ? ` (have ${formatCurrencyCompact(calculations.bridgePeriodDetails.fundsAvailable)})`
+                        : ` (only have ${formatCurrencyCompact(calculations.bridgePeriodDetails.fundsAvailable)})`
                       }
                     </div>
                   </div>
