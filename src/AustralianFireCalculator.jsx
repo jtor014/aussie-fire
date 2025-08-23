@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { kpisFromState } from './selectors/kpis.js';
 import { decisionFromState, getDecisionDisplay } from './selectors/decision.js';
 import { depletionFromDecision } from './selectors/depletion.js';
-import { dwzStrategyFromState, getStrategyDisplay } from './selectors/strategy.js';
+import { dwzStrategyFromState, getStrategyDisplay, selectStrategySummary } from './selectors/strategy.js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import auRules from './data/au_rules.json';
 import { calcIncomeTax, getMarginalRate } from './core/tax';
@@ -370,6 +370,10 @@ const AustralianFireCalculator = () => {
   
   // T-019: Advanced drawer state
   const [showAdvancedDrawer, setShowAdvancedDrawer] = useState(false);
+  
+  // T-020: Manual strategy overrides
+  const [manualSalarySacrifice, setManualSalarySacrifice] = useState(0);
+  const [manualOutside, setManualOutside] = useState(0);
 
   // Planning mode
   const [planningAs, setPlanningAs] = useState('single'); // 'single' | 'couple'
@@ -882,6 +886,15 @@ const AustralianFireCalculator = () => {
       inflationRate, superInsurancePremiums, partnerB]);
   
   const strategyDisplay = useMemo(() => getStrategyDisplay(strategy), [strategy]);
+  
+  // T-020: Normalized strategy summary for RecommendedSplitCard
+  const strategySummary = useMemo(() => {
+    const manualOverrides = {
+      salarySacrifice: manualSalarySacrifice,
+      outside: manualOutside
+    };
+    return selectStrategySummary(strategy, manualOverrides);
+  }, [strategy, manualSalarySacrifice, manualOutside]);
 
   // Legacy compatibility - map KPIs to existing calculation structure
   const calculations = useMemo(() => {
@@ -1278,8 +1291,12 @@ const AustralianFireCalculator = () => {
 
         {/* T-019: RecommendedSplitCard replaces Superannuation Strategy */}
         <RecommendedSplitCard 
-          strategy={strategy}
+          strategySummary={strategySummary}
           onAdjustStrategy={() => setShowAdvancedDrawer(true)}
+          onResetToRecommended={() => {
+            setManualSalarySacrifice(0);
+            setManualOutside(0);
+          }}
         />
 
         {/* T-019A: Summary chips replacing on-page Income Shape card */}
@@ -2198,6 +2215,10 @@ const AustralianFireCalculator = () => {
         setHasInsuranceInSuper={setHasInsuranceInSuper}
         insurancePremiums={insurancePremiums}
         setInsurancePremiums={setInsurancePremiums}
+        manualSalarySacrifice={manualSalarySacrifice}
+        setManualSalarySacrifice={setManualSalarySacrifice}
+        manualOutside={manualOutside}
+        setManualOutside={setManualOutside}
         auRules={auRules}
       />
     </div>

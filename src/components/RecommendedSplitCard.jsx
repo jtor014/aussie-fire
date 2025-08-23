@@ -5,14 +5,15 @@ import React, { useState } from 'react';
  * Shows read-only strategy recommendation with expandable rationale
  * 
  * @param {Object} props
- * @param {Object} props.strategy - Strategy object from dwzStrategyFromState
+ * @param {Object} props.strategySummary - Normalized strategy summary from selectStrategySummary
  * @param {Function} props.onAdjustStrategy - Callback to open Advanced drawer
+ * @param {Function} props.onResetToRecommended - Callback to reset manual overrides
  * @returns {JSX.Element} Recommended split card
  */
-export function RecommendedSplitCard({ strategy, onAdjustStrategy }) {
+export function RecommendedSplitCard({ strategySummary, onAdjustStrategy, onResetToRecommended }) {
   const [showRationale, setShowRationale] = useState(false);
 
-  if (!strategy) {
+  if (!strategySummary || !strategySummary.viable) {
     return (
       <div style={{
         padding: '20px',
@@ -49,6 +50,40 @@ export function RecommendedSplitCard({ strategy, onAdjustStrategy }) {
         📊 Recommended Contribution Split
       </h3>
       
+      {/* Manual Override Pill */}
+      {strategySummary.useManual && (
+        <div style={{
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '16px',
+          padding: '4px 12px',
+          fontSize: '12px',
+          fontWeight: '500',
+          color: '#92400e',
+          marginBottom: '12px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          ⚠️ Manual override active
+          <button
+            onClick={onResetToRecommended}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#92400e',
+              fontSize: '12px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              padding: '0'
+            }}
+          >
+            Reset to recommended
+          </button>
+        </div>
+      )}
+
       {/* Strategy Summary */}
       <div style={{ marginBottom: '16px' }}>
         <div style={{ 
@@ -57,11 +92,11 @@ export function RecommendedSplitCard({ strategy, onAdjustStrategy }) {
           color: '#1f2937',
           marginBottom: '8px'
         }}>
-          Salary sacrifice: {formatCurrency(strategy.salaryOut || 0)} (cap use {formatPercent(strategy.capUtilization || 0)}) • 
-          Outside: {formatCurrency(strategy.outsideOut || 0)}
+          Salary sacrifice: {formatCurrency(strategySummary.display.salarySacrifice)} (cap use {formatPercent(strategySummary.capUsePct)}) • 
+          Outside: {formatCurrency(strategySummary.display.outside)}
         </div>
         <div style={{ fontSize: '14px', color: '#6b7280' }}>
-          {strategy.totalOut ? `Total savings: ${formatCurrency(strategy.totalOut)}/year` : ''}
+          {strategySummary.totalOut > 0 ? `Total savings: ${formatCurrency(strategySummary.totalOut)}/year` : ''}
         </div>
       </div>
 
@@ -102,7 +137,7 @@ export function RecommendedSplitCard({ strategy, onAdjustStrategy }) {
             <li>Superannuation contribution caps and tax benefits</li>
             <li>Bridge period funding (outside savings needed until age 60)</li>
             <li>Your target spending and Die-With-Zero horizon</li>
-            {strategy.marginalTaxRate > 0.32 && (
+            {strategySummary.display.salarySacrifice > 0 && (
               <li>High marginal tax rate - salary sacrifice provides significant tax savings</li>
             )}
           </ul>

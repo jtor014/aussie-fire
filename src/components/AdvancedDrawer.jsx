@@ -8,7 +8,7 @@ import { normalizeBandSettings } from '../lib/validation/ageBands.js';
  * @param {Object} props
  * @param {boolean} props.isOpen - Whether the drawer is open
  * @param {Function} props.onClose - Callback to close the drawer
- * @param {Object} props.ageBandState - Age band settings state
+ * @param {Object} props.ageBandStateTemp - Age band settings state
  * @param {Object} props.marketState - Market assumptions state  
  * @param {Object} props.strategyState - Manual strategy overrides state
  * @returns {JSX.Element} Advanced drawer component
@@ -16,9 +16,39 @@ import { normalizeBandSettings } from '../lib/validation/ageBands.js';
 export function AdvancedDrawer({ 
   isOpen, 
   onClose,
-  ageBandState = {},
-  marketState = {},
-  strategyState = {}
+  // Age band props
+  ageBandsEnabled,
+  setAgeBandsEnabled,
+  ageBandSettings,
+  setAgeBandSettings,
+  currentAge,
+  lifeExpectancy,
+  decision,
+  // Market assumptions props
+  expectedReturn,
+  setExpectedReturn,
+  inflationRate,
+  setInflationRate,
+  investmentFees,
+  setInvestmentFees,
+  // Manual strategy override props
+  manualSalarySacrifice,
+  setManualSalarySacrifice,
+  manualOutside,
+  setManualOutside,
+  // Other props
+  planningAs,
+  annualIncome,
+  setAnnualIncome,
+  partnerB,
+  setPartnerB,
+  additionalSuperContributions,
+  setAdditionalSuperContributions,
+  hasInsuranceInSuper,
+  setHasInsuranceInSuper,
+  insurancePremiums,
+  setInsurancePremiums,
+  auRules
 }) {
   const [expandedSections, setExpandedSections] = useState({
     incomeShape: false,
@@ -80,11 +110,10 @@ export function AdvancedDrawer({
 
   // Format settings for summary display
   const getIncomeShapeSummary = () => {
-    if (!ageBandState.ageBandsEnabled) {
+    if (!ageBandsEnabled) {
       return "Flat spending: 1.00× throughout retirement";
     }
-    const settings = ageBandState.ageBandSettings || {};
-    return `Age-banded: ${settings.gogoTo || 60}/${settings.slowTo || 75}/90 • ${(settings.gogoMult || 1.10).toFixed(2)}×/${(settings.slowMult || 1.00).toFixed(2)}×/${(settings.nogoMult || 0.85).toFixed(2)}×`;
+    return `Age-banded: ${ageBandSettings.gogoTo || 60}/${ageBandSettings.slowTo || 75}/${lifeExpectancy || 90} • ${(ageBandSettings.gogoMult || 1.10).toFixed(2)}×/${(ageBandSettings.slowMult || 1.00).toFixed(2)}×/${(ageBandSettings.nogoMult || 0.85).toFixed(2)}×`;
   };
 
   return (
@@ -170,8 +199,8 @@ export function AdvancedDrawer({
                     <input
                       type="radio"
                       name="incomeShape"
-                      checked={!ageBandState.ageBandsEnabled}
-                      onChange={() => ageBandState.setAgeBandsEnabled?.(false)}
+                      checked={!ageBandsEnabled}
+                      onChange={() => setAgeBandsEnabled?.(false)}
                     />
                     <span>Flat (1.00× throughout retirement)</span>
                   </label>
@@ -179,8 +208,8 @@ export function AdvancedDrawer({
                     <input
                       type="radio"
                       name="incomeShape"
-                      checked={ageBandState.ageBandsEnabled}
-                      onChange={() => ageBandState.setAgeBandsEnabled?.(true)}
+                      checked={ageBandsEnabled}
+                      onChange={() => setAgeBandsEnabled?.(true)}
                     />
                     <span>Age-banded (Go-go/Slow-go/No-go phases)</span>
                   </label>
@@ -192,7 +221,7 @@ export function AdvancedDrawer({
               </div>
 
               {/* Age-banded editor (when enabled) */}
-              {ageBandState.ageBandsEnabled && ageBandState.ageBandSettings && (
+              {ageBandsEnabled && ageBandSettings && (
                 <div style={{ 
                   backgroundColor: '#f0fdf4', 
                   padding: '16px', 
@@ -206,28 +235,28 @@ export function AdvancedDrawer({
                   {/* Age boundaries */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                     <div>
-                      <label style={labelStyle}>Go-go phase ends at: {ageBandState.ageBandSettings.gogoTo}</label>
+                      <label style={labelStyle}>Go-go phase ends at: {ageBandSettings.gogoTo}</label>
                       <input
                         type="range"
                         min="55"
                         max="75"
-                        value={ageBandState.ageBandSettings.gogoTo}
-                        onChange={(e) => ageBandState.setAgeBandSettings?.({
-                          ...ageBandState.ageBandSettings,
+                        value={ageBandSettings.gogoTo}
+                        onChange={(e) => setAgeBandSettings?.({
+                          ...ageBandSettings,
                           gogoTo: parseInt(e.target.value)
                         })}
                         style={sliderStyle}
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Slow-go phase ends at: {ageBandState.ageBandSettings.slowTo}</label>
+                      <label style={labelStyle}>Slow-go phase ends at: {ageBandSettings.slowTo}</label>
                       <input
                         type="range"
                         min="65"
                         max="85"
-                        value={ageBandState.ageBandSettings.slowTo}
-                        onChange={(e) => ageBandState.setAgeBandSettings?.({
-                          ...ageBandState.ageBandSettings,
+                        value={ageBandSettings.slowTo}
+                        onChange={(e) => setAgeBandSettings?.({
+                          ...ageBandSettings,
                           slowTo: parseInt(e.target.value)
                         })}
                         style={sliderStyle}
@@ -238,45 +267,45 @@ export function AdvancedDrawer({
                   {/* Multipliers */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
                     <div>
-                      <label style={labelStyle}>Go-go multiplier: {ageBandState.ageBandSettings.gogoMult?.toFixed(2)}×</label>
+                      <label style={labelStyle}>Go-go multiplier: {ageBandSettings.gogoMult?.toFixed(2)}×</label>
                       <input
                         type="range"
                         min="0.5"
                         max="1.5"
                         step="0.05"
-                        value={ageBandState.ageBandSettings.gogoMult}
-                        onChange={(e) => ageBandState.setAgeBandSettings?.({
-                          ...ageBandState.ageBandSettings,
+                        value={ageBandSettings.gogoMult}
+                        onChange={(e) => setAgeBandSettings?.({
+                          ...ageBandSettings,
                           gogoMult: parseFloat(e.target.value)
                         })}
                         style={sliderStyle}
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>Slow-go multiplier: {ageBandState.ageBandSettings.slowMult?.toFixed(2)}×</label>
+                      <label style={labelStyle}>Slow-go multiplier: {ageBandSettings.slowMult?.toFixed(2)}×</label>
                       <input
                         type="range"
                         min="0.5"
                         max="1.5"
                         step="0.05"
-                        value={ageBandState.ageBandSettings.slowMult}
-                        onChange={(e) => ageBandState.setAgeBandSettings?.({
-                          ...ageBandState.ageBandSettings,
+                        value={ageBandSettings.slowMult}
+                        onChange={(e) => setAgeBandSettings?.({
+                          ...ageBandSettings,
                           slowMult: parseFloat(e.target.value)
                         })}
                         style={sliderStyle}
                       />
                     </div>
                     <div>
-                      <label style={labelStyle}>No-go multiplier: {ageBandState.ageBandSettings.nogoMult?.toFixed(2)}×</label>
+                      <label style={labelStyle}>No-go multiplier: {ageBandSettings.nogoMult?.toFixed(2)}×</label>
                       <input
                         type="range"
                         min="0.5"
                         max="1.5"
                         step="0.05"
-                        value={ageBandState.ageBandSettings.nogoMult}
-                        onChange={(e) => ageBandState.setAgeBandSettings?.({
-                          ...ageBandState.ageBandSettings,
+                        value={ageBandSettings.nogoMult}
+                        onChange={(e) => setAgeBandSettings?.({
+                          ...ageBandSettings,
                           nogoMult: parseFloat(e.target.value)
                         })}
                         style={sliderStyle}
@@ -285,7 +314,7 @@ export function AdvancedDrawer({
                   </div>
 
                   {/* Warnings */}
-                  {ageBandState.bandWarnings?.length > 0 && (
+                  {decision.bandWarnings?.length > 0 && (
                     <div style={{ 
                       marginTop: '12px',
                       padding: '8px 12px',
@@ -294,7 +323,7 @@ export function AdvancedDrawer({
                       fontSize: '12px',
                       color: '#92400e'
                     }}>
-                      {ageBandState.bandWarnings.map((warning, idx) => (
+                      {decision.bandWarnings.map((warning, idx) => (
                         <div key={idx}>⚠️ {warning}</div>
                       ))}
                     </div>
@@ -411,24 +440,24 @@ export function AdvancedDrawer({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                 <div>
                   <label style={labelStyle}>
-                    Additional Super Contributions ($/year)
+                    Manual Salary Sacrifice ($/year)
                   </label>
                   <input
                     type="number"
-                    value={strategyState.additionalSuperContributions || 0}
-                    onChange={(e) => strategyState.setAdditionalSuperContributions?.(parseInt(e.target.value) || 0)}
+                    value={manualSalarySacrifice || 0}
+                    onChange={(e) => setManualSalarySacrifice?.(parseInt(e.target.value) || 0)}
                     style={inputStyle}
                     placeholder="0"
                   />
                 </div>
                 <div>
                   <label style={labelStyle}>
-                    Outside Savings Override ($/year)
+                    Manual Outside Savings ($/year)
                   </label>
                   <input
                     type="number"
-                    value={strategyState.outsideSavingsOverride || 0}
-                    onChange={(e) => strategyState.setOutsideSavingsOverride?.(parseInt(e.target.value) || 0)}
+                    value={manualOutside || 0}
+                    onChange={(e) => setManualOutside?.(parseInt(e.target.value) || 0)}
                     style={inputStyle}
                     placeholder="0"
                   />
@@ -437,8 +466,8 @@ export function AdvancedDrawer({
 
               <button
                 onClick={() => {
-                  strategyState.setAdditionalSuperContributions?.(0);
-                  strategyState.setOutsideSavingsOverride?.(0);
+                  setManualSalarySacrifice?.(0);
+                  setManualOutside?.(0);
                 }}
                 style={{
                   backgroundColor: '#f3f4f6',
