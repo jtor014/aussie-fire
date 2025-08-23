@@ -12,6 +12,9 @@ import { mkPartner, mkHousehold } from './models/shapes';
 import { projectCouple } from './core/household';
 import { dwzPersonFromState, maxSpendDWZCouple, earliestFireAgeDWZCouple, getCoupleAtRetirementBalances } from './core/dwz_couples.js';
 import { GlobalBanner } from './components/GlobalBanner.jsx';
+import { RecommendedSplitCard } from './components/RecommendedSplitCard.jsx';
+import { AdvancedDrawer } from './components/AdvancedDrawer.jsx';
+import { SummaryChips } from './components/SummaryChips.jsx';
 import { formatCurrencyCompact } from './lib/formatNumber.js';
 
 // === DWZ helpers (real dollars) ===
@@ -207,6 +210,7 @@ function PersonSituationCard({
   superBalance, onSuperBalance,
   hasPrivateHealth, onHasPrivateHealth,
   hecsDebt, onHecsDebt,
+  superInsurancePremium, onSuperInsurancePremium, // T-019: Super insurance premiums
   rules
 }) {
   // styles (match existing look)
@@ -266,7 +270,7 @@ function PersonSituationCard({
         </div>
       </div>
 
-      {/* Quick HECS and Health toggles */}
+      {/* HECS, Health, and Super Insurance */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:16 }}>
         <div>
           <label style={labelCss}>HECS/HELP Debt</label>
@@ -276,6 +280,32 @@ function PersonSituationCard({
           <input type="checkbox" checked={hasPrivateHealth} onChange={e=>onHasPrivateHealth(e.target.checked)} />
           Private Health Insurance
         </label>
+      </div>
+      
+      {/* T-019: Super insurance premium */}
+      <div style={{ marginTop: 16 }}>
+        <label style={labelCss}>
+          Super insurance premium ($/yr)
+          <span style={{ 
+            fontSize: '12px', 
+            fontWeight: '400', 
+            color: '#6b7280',
+            marginLeft: '8px',
+            cursor: 'help'
+          }} title="Deducted from super each year until retirement (or policy end). Reduces super growth.">
+            ℹ️
+          </span>
+        </label>
+        <input 
+          type="number" 
+          value={superInsurancePremium || 0} 
+          onChange={e=>onSuperInsurancePremium?.(parseFloat(e.target.value)||0)} 
+          style={input}
+          placeholder="0"
+        />
+        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', lineHeight: '1.4' }}>
+          Annual premium deducted from super balance before applying returns
+        </div>
       </div>
     </div>
   );
@@ -304,6 +334,9 @@ const AustralianFireCalculator = () => {
   const [dieWithZeroMode, setDieWithZeroMode] = useState(false); // T-010: DWZ can still be toggled off if needed
   const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULTS.longevity);
   const [bequest, setBequest] = useState(0);
+  
+  // T-019: Super insurance premiums
+  const [superInsurancePremium, setSuperInsurancePremium] = useState(0);
   
   // Strategy optimization inputs
   const [targetSpend, setTargetSpend] = useState(annualExpenses);
@@ -334,6 +367,9 @@ const AustralianFireCalculator = () => {
     slowMult: 1.00, // Slow-go multiplier 100%
     nogoMult: 0.85  // No-go multiplier 85%
   });
+  
+  // T-019: Advanced drawer state
+  const [showAdvancedDrawer, setShowAdvancedDrawer] = useState(false);
 
   // Planning mode
   const [planningAs, setPlanningAs] = useState('single'); // 'single' | 'couple'
@@ -356,7 +392,8 @@ const AustralianFireCalculator = () => {
     dob: '', // optional
     longevity: DEFAULTS.longevity,
     hasInsuranceInSuper: false,
-    insurancePremiums: { life: 0, tpd: 0, income: 0 }
+    insurancePremiums: { life: 0, tpd: 0, income: 0 },
+    superInsurancePremium: 0 // T-019: Partner super insurance premiums
   });
 
   // Collapsible subsections within Your Situation
@@ -412,7 +449,9 @@ const AustralianFireCalculator = () => {
       currentAge, retirementAge, currentSavings, annualIncome, annualExpenses, currentSuper,
       dieWithZeroMode, lifeExpectancy, expectedReturn, investmentFees, bequest,
       adjustForInflation, inflationRate, showInTodaysDollars, hecsDebt, hasPrivateHealth,
-      showAdvancedSuper, additionalSuperContributions, hasInsuranceInSuper, insurancePremiums, showItemizedInsurance
+      showAdvancedSuper, additionalSuperContributions, hasInsuranceInSuper, insurancePremiums, showItemizedInsurance,
+      // T-019: Super insurance premium
+      superInsurancePremium
     };
     localStorage.setItem('aussie-fire-settings', JSON.stringify(settings));
     alert('Settings saved! 💾');
@@ -445,6 +484,8 @@ const AustralianFireCalculator = () => {
         setHasInsuranceInSuper(settings.hasInsuranceInSuper || false);
         setInsurancePremiums(settings.insurancePremiums || { life: 0, tpd: 0, income: 0 });
         setShowItemizedInsurance(settings.showItemizedInsurance || false);
+        // T-019: Load super insurance premium
+        setSuperInsurancePremium(settings.superInsurancePremium || 0);
         alert('Settings loaded! 📂');
       } else {
         alert('No saved settings found.');
@@ -477,7 +518,9 @@ const AustralianFireCalculator = () => {
       insSuper: hasInsuranceInSuper ? '1' : '0',
       insLife: insurancePremiums.life,
       insTpd: insurancePremiums.tpd,
-      insIncome: insurancePremiums.income
+      insIncome: insurancePremiums.income,
+      // T-019: Super insurance premium
+      superInsPremium: superInsurancePremium
     });
     
     const shareUrl = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
@@ -510,6 +553,8 @@ const AustralianFireCalculator = () => {
     setHasInsuranceInSuper(false);
     setInsurancePremiums({ life: 0, tpd: 0, income: 0 });
     setShowItemizedInsurance(false);
+    // T-019: Reset super insurance premium
+    setSuperInsurancePremium(0);
     // T-018: Reset age-band settings
     setAgeBandsEnabled(true);
     setAgeBandSettings({
@@ -553,6 +598,8 @@ const AustralianFireCalculator = () => {
         tpd: parseFloat(urlParams.get('insTpd')) || 0,
         income: parseFloat(urlParams.get('insIncome')) || 0
       });
+      // T-019: Load super insurance premium from URL
+      setSuperInsurancePremium(parseFloat(urlParams.get('superInsPremium')) || 0);
       // T-018: Load age-band settings from URL
       setAgeBandsEnabled(urlParams.get('ageBands') !== '0');
       if (urlParams.has('gogoTo')) {
@@ -723,7 +770,9 @@ const AustralianFireCalculator = () => {
       partnerB,
       // T-018: Age-band settings
       ageBandsEnabled,
-      ageBandSettings
+      ageBandSettings,
+      // T-019: Super insurance premiums
+      superInsurancePremium
     };
     
     return kpisFromState(state, auRules);
@@ -736,7 +785,9 @@ const AustralianFireCalculator = () => {
     inflationRate, adjustForInflation, dieWithZeroMode,
     planningAs, partnerB,
     // T-018: Age-band dependencies
-    ageBandsEnabled, ageBandSettings
+    ageBandsEnabled, ageBandSettings,
+    // T-019: Super insurance dependencies
+    superInsurancePremium
   ]);
 
   // Unified decision logic for all UI components
@@ -764,7 +815,9 @@ const AustralianFireCalculator = () => {
       partnerB,
       // T-018: Age-band settings
       ageBandsEnabled,
-      ageBandSettings
+      ageBandSettings,
+      // T-019: Super insurance premiums
+      superInsurancePremium
     };
     
     return decisionFromState(state, auRules);
@@ -777,7 +830,9 @@ const AustralianFireCalculator = () => {
     inflationRate, adjustForInflation, dieWithZeroMode,
     planningAs, partnerB,
     // T-018: Age-band dependencies
-    ageBandsEnabled, ageBandSettings
+    ageBandsEnabled, ageBandSettings,
+    // T-019: Super insurance dependencies
+    superInsurancePremium
   ]);
 
   // Display-ready decision data
@@ -1173,6 +1228,7 @@ const AustralianFireCalculator = () => {
             superBalance={currentSuper}      onSuperBalance={setCurrentSuper}
             hasPrivateHealth={hasPrivateHealth}  onHasPrivateHealth={setHasPrivateHealth}
             hecsDebt={hecsDebt}              onHecsDebt={setHecsDebt}
+            superInsurancePremium={superInsurancePremium} onSuperInsurancePremium={setSuperInsurancePremium}
             rules={auRules}
           />
 
@@ -1188,6 +1244,7 @@ const AustralianFireCalculator = () => {
               hasPrivateHealth={partnerB.hasPrivateHealth}
               onHasPrivateHealth={v=>setPartnerB(p=>({ ...p, hasPrivateHealth:v }))}
               hecsDebt={partnerB.hecsBalance}      onHecsDebt={v=>setPartnerB(p=>({ ...p, hecsBalance:v }))}
+              superInsurancePremium={partnerB.superInsurancePremium} onSuperInsurancePremium={v=>setPartnerB(p=>({ ...p, superInsurancePremium:v }))}
               rules={auRules}
             />
           )}
@@ -1218,389 +1275,27 @@ const AustralianFireCalculator = () => {
           )}
         </div>
 
-        {/* Tax & Deductions - Collapsible */}
-        <div style={{
-          backgroundColor: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          marginBottom: spacing.md,
-          overflow: 'hidden'
-        }}>
-          <div 
-            onClick={() => setShowTaxSection(!showTaxSection)}
-            style={{ 
-              padding: `14px ${spacing.xl}`,
-              cursor: 'pointer',
-              backgroundColor: showTaxSection ? '#f9fafb' : '#ffffff',
-              borderBottom: showTaxSection ? '1px solid #e5e7eb' : 'none',
-              transition: 'background-color 0.2s ease'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                <span style={{ fontSize: '16px', color: '#6b7280' }}>
-                  {showTaxSection ? '−' : '+'}
-                </span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                  Tax & Deductions
-                </span>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  Available for future tax optimization features
-                </span>
-              </div>
-            </div>
-          </div>
-          
-{showTaxSection && (
-  <div style={{ padding: spacing.xl }}>
-    <div style={{ 
-      textAlign: 'center', 
-      color: '#6b7280', 
-      fontSize: '14px',
-      padding: '32px 16px',
-      backgroundColor: '#f9fafb',
-      borderRadius: '8px',
-      border: '1px dashed #d1d5db'
-    }}>
-      <div style={{ fontSize: '32px', marginBottom: '12px' }}>🚧</div>
-      <div style={{ fontWeight: '600', marginBottom: '8px' }}>Tax Optimization Features Coming Soon</div>
-      <div style={{ lineHeight: '1.4' }}>
-        Future features may include salary sacrifice optimization,<br/>
-        franking credit calculations, and tax-effective investment strategies.
-      </div>
-      <div style={{ fontSize: '12px', marginTop: '12px', fontStyle: 'italic' }}>
-        HECS/HELP debt and Private Health Insurance are now configured in the person details above.
-      </div>
-    </div>
-  </div>
-)}
-        </div>
 
-        <div>
-        {/* Superannuation Strategy - Collapsible */}
-        <div style={{
-          backgroundColor: '#ffffff',
-          border: '1px solid #e5e7eb',
-          borderRadius: '8px',
-          marginBottom: spacing.md,
-          overflow: 'hidden'
-        }}>
-          <div 
-            onClick={() => setShowSuperSection(!showSuperSection)}
-            style={{ 
-              padding: `14px ${spacing.xl}`,
-              cursor: 'pointer',
-              backgroundColor: showSuperSection ? '#f9fafb' : '#ffffff',
-              borderBottom: showSuperSection ? '1px solid #e5e7eb' : 'none',
-              transition: 'background-color 0.2s ease'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                <span style={{ fontSize: '16px', color: '#6b7280' }}>
-                  {showSuperSection ? '−' : '+'}
-                </span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                  Superannuation Strategy
-                </span>
-                {/* Status indicators */}
-                {!showSuperSection && (
-                  <span style={{ fontSize: '13px', color: '#374151', fontWeight: '600', marginLeft: spacing.sm }}>
-                    Total: ${calculations.annualSuperContribution.toLocaleString()}/yr
-                    {calculations.isOverCap && 
-                      <span style={{ color: '#dc2626' }}> (over cap!)</span>
-                    }
-                  </span>
-                )}
-                {showSuperSection && additionalSuperContributions > 0 && <span style={{ color: '#059669', fontSize: '12px' }}>• ${additionalSuperContributions.toLocaleString()}/yr</span>}
-                {showSuperSection && hasInsuranceInSuper && <span style={{ color: '#dc2626', fontSize: '12px' }}>• Insurance active</span>}
-              </div>
-            </div>
-          </div>
-          {showSuperSection && (
-            <div style={{ padding: spacing.xl }}>
-              {planningAs === 'single' ? (
-                // Use same PartnerSuperPanel for consistency
-                <PartnerSuperPanel
-                  label="You"
-                  income={annualIncome}
-                  extra={additionalSuperContributions}
-                  onExtraChange={setAdditionalSuperContributions}
-                  hasInsurance={hasInsuranceInSuper}
-                  onHasInsurance={setHasInsuranceInSuper}
-                  premiums={insurancePremiums}
-                  onPremiumsChange={setInsurancePremiums}
-                  rules={auRules}
-                  showLabel={false}
-                />
-              ) : (
-                // Couples dual super panels
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-                  <PartnerSuperPanel
-                    label="You"
-                    income={annualIncome}
-                    extra={additionalSuperContributions}
-                    onExtraChange={setAdditionalSuperContributions}
-                    hasInsurance={hasInsuranceInSuper}
-                    onHasInsurance={setHasInsuranceInSuper}
-                    premiums={insurancePremiums}
-                    onPremiumsChange={setInsurancePremiums}
-                    rules={auRules}
-                  />
-                  
-                  <PartnerSuperPanel
-                    label="Partner"
-                    income={partnerB.income}
-                    extra={partnerB.extraSuper ?? 0}
-                    onExtraChange={(v)=>setPartnerB(p=>({ ...p, extraSuper: v }))}
-                    hasInsurance={partnerB.hasInsuranceInSuper ?? false}
-                    onHasInsurance={(v)=>setPartnerB(p=>({ ...p, hasInsuranceInSuper: v }))}
-                    premiums={partnerB.insurancePremiums ?? { life:0, tpd:0, income:0 }}
-                    onPremiumsChange={(p)=>setPartnerB(s=>({ ...s, insurancePremiums: p }))}
-                    rules={auRules}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        </div>
-        </div>
+        {/* T-019: RecommendedSplitCard replaces Superannuation Strategy */}
+        <RecommendedSplitCard 
+          strategy={strategy}
+          onAdjustStrategy={() => setShowAdvancedDrawer(true)}
+        />
+
+        {/* T-019A: Summary chips replacing on-page Income Shape card */}
+        <SummaryChips
+          ageBandsEnabled={ageBandsEnabled}
+          ageBandSettings={ageBandSettings}
+          lifeExpectancy={lifeExpectancy}
+          expectedReturn={expectedReturn}
+          inflationRate={inflationRate}
+          investmentFees={investmentFees}
+          onOpenAdvanced={() => setShowAdvancedDrawer(true)}
+        />
 
       {/* Results Box - PayCalculator Style (prominent placement) */}
       {/* Results section will be moved here for better UX */}
 
-      {/* T-018: DWZ Income Shape Settings */}
-      <div style={{ 
-        ...sectionStyle, 
-        border: '2px solid #059669', 
-        backgroundColor: '#f0fdf4',
-        transition: 'all 0.3s ease'
-      }}>
-        <div style={{ marginBottom: '20px' }}>
-          <h3 style={{ color: '#047857', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            Income Shape
-            <span style={{ 
-              backgroundColor: '#059669', 
-              color: 'white', 
-              fontSize: '10px', 
-              padding: '2px 6px', 
-              borderRadius: '4px', 
-              fontWeight: '500' 
-            }}>
-              DWZ
-            </span>
-          </h3>
-          <div style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic', marginTop: '4px' }}>
-            Choose between flat or age-banded spending patterns
-          </div>
-        </div>
-
-        {/* Income shape toggle */}
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                checked={!ageBandsEnabled}
-                onChange={() => setAgeBandsEnabled(false)}
-                style={{ marginRight: '8px' }}
-              />
-              <span style={{ fontWeight: '600' }}>Flat</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-              <input
-                type="radio"
-                checked={ageBandsEnabled}
-                onChange={() => setAgeBandsEnabled(true)}
-                style={{ marginRight: '8px' }}
-              />
-              <span style={{ fontWeight: '600' }}>Age-banded (recommended)</span>
-            </label>
-          </div>
-          {ageBandsEnabled && (
-            <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-              Use higher spending earlier (Go-go), taper later. Edit ages and multipliers in Advanced below.
-            </div>
-          )}
-        </div>
-
-        {/* Advanced editor - only show when age-banded is enabled */}
-        {ageBandsEnabled && (
-          <div style={{ 
-            backgroundColor: '#ffffff',
-            border: '1px solid #d1d5db',
-            borderRadius: '8px',
-            padding: '16px',
-          }}>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              marginBottom: '16px' 
-            }}>
-              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                Advanced Band Settings
-              </h4>
-              <button
-                onClick={() => setAgeBandSettings({
-                  gogoTo: 60,
-                  slowTo: 75,
-                  gogoMult: 1.10,
-                  slowMult: 1.00,
-                  nogoMult: 0.85
-                })}
-                style={{ 
-                  ...buttonStyle, 
-                  backgroundColor: '#6b7280',
-                  fontSize: '11px',
-                  padding: '4px 8px'
-                }}
-              >
-                Restore defaults
-              </button>
-            </div>
-
-            {/* Show warnings if any */}
-            {decision.bandWarnings && decision.bandWarnings.length > 0 && (
-              <div style={{
-                backgroundColor: '#fef3c7',
-                border: '1px solid #f59e0b',
-                borderRadius: '6px',
-                padding: '8px',
-                marginBottom: '12px',
-                fontSize: '12px'
-              }}>
-                {decision.bandWarnings.map((warning, i) => (
-                  <div key={i} style={{ color: '#92400e' }}>⚠️ {warning}</div>
-                ))}
-              </div>
-            )}
-
-            {/* Band settings rows */}
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {/* Go-go phase */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', alignItems: 'end' }}>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
-                    Go-go ends at age
-                  </label>
-                  <input
-                    type="number"
-                    min={currentAge}
-                    max={lifeExpectancy - 2}
-                    value={ageBandSettings.gogoTo}
-                    onChange={(e) => setAgeBandSettings(prev => ({
-                      ...prev,
-                      gogoTo: parseInt(e.target.value) || 60
-                    }))}
-                    style={{ ...inputStyle, fontSize: '13px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
-                    Multiplier (×)
-                  </label>
-                  <input
-                    type="number"
-                    min="0.50"
-                    max="1.50"
-                    step="0.05"
-                    value={ageBandSettings.gogoMult}
-                    onChange={(e) => setAgeBandSettings(prev => ({
-                      ...prev,
-                      gogoMult: parseFloat(e.target.value) || 1.10
-                    }))}
-                    style={{ ...inputStyle, fontSize: '13px' }}
-                  />
-                </div>
-                <div style={{ fontSize: '11px', color: '#6b7280', paddingBottom: '8px' }}>
-                  Go-go years
-                </div>
-              </div>
-
-              {/* Slow-go phase */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', alignItems: 'end' }}>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
-                    Slow-go ends at age
-                  </label>
-                  <input
-                    type="number"
-                    min={ageBandSettings.gogoTo + 1}
-                    max={lifeExpectancy - 1}
-                    value={ageBandSettings.slowTo}
-                    onChange={(e) => setAgeBandSettings(prev => ({
-                      ...prev,
-                      slowTo: parseInt(e.target.value) || 75
-                    }))}
-                    style={{ ...inputStyle, fontSize: '13px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
-                    Multiplier (×)
-                  </label>
-                  <input
-                    type="number"
-                    min="0.50"
-                    max="1.50"
-                    step="0.05"
-                    value={ageBandSettings.slowMult}
-                    onChange={(e) => setAgeBandSettings(prev => ({
-                      ...prev,
-                      slowMult: parseFloat(e.target.value) || 1.00
-                    }))}
-                    style={{ ...inputStyle, fontSize: '13px' }}
-                  />
-                </div>
-                <div style={{ fontSize: '11px', color: '#6b7280', paddingBottom: '8px' }}>
-                  Slow-go years
-                </div>
-              </div>
-
-              {/* No-go phase */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', alignItems: 'end' }}>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
-                    No-go ends at life expectancy
-                  </label>
-                  <div style={{ 
-                    ...inputStyle, 
-                    backgroundColor: '#f9fafb', 
-                    color: '#6b7280',
-                    fontSize: '13px',
-                    display: 'flex',
-                    alignItems: 'center'
-                  }}>
-                    {lifeExpectancy}
-                  </div>
-                </div>
-                <div>
-                  <label style={{ ...labelStyle, fontSize: '12px', marginBottom: '4px' }}>
-                    Multiplier (×)
-                  </label>
-                  <input
-                    type="number"
-                    min="0.50"
-                    max="1.50"
-                    step="0.05"
-                    value={ageBandSettings.nogoMult}
-                    onChange={(e) => setAgeBandSettings(prev => ({
-                      ...prev,
-                      nogoMult: parseFloat(e.target.value) || 0.85
-                    }))}
-                    style={{ ...inputStyle, fontSize: '13px' }}
-                  />
-                </div>
-                <div style={{ fontSize: '11px', color: '#6b7280', paddingBottom: '8px' }}>
-                  No-go years
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Assumptions Panel */}
       <div style={{ 
@@ -2152,265 +1847,6 @@ const AustralianFireCalculator = () => {
         )}
       </div>
 
-      {/* DWZ Settings - always enabled (T-010) */}
-      <div style={{ ...sectionStyle, border: '2px solid #8b5cf6', backgroundColor: '#f3f4f6' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
-          <label style={{ ...labelStyle, margin: 0, flex: 1 }}>
-            <span style={{ fontSize: '16px', fontWeight: '700' }}>Die-With-Zero Settings 💀</span>
-            <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '400' }}>
-              Spend it all - you can't take it with you!
-            </div>
-          </label>
-        </div>
-        
-        {/* DWZ settings are now always visible */}
-            <div style={inputGroupStyle}>
-              <label style={labelStyle}>Life expectancy (DWZ horizon): {lifeExpectancy}</label>
-              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
-                Plans to roughly deplete by this age; earlier retirement is possible if you accept this horizon.
-              </div>
-              <input
-                type="range"
-                min="75"
-                max="100"
-                value={lifeExpectancy}
-                onChange={(e) => setLifeExpectancy(parseInt(e.target.value))}
-                style={sliderStyle}
-              />
-            </div>
-
-            {/* Bequest Input */}
-            <div style={inputGroupStyle}>
-              <label style={labelStyle}>Bequest Target: ${(bequest || 0).toLocaleString()}</label>
-              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
-                Amount you want to leave at death (real dollars). Zero means spend it all.
-              </div>
-              <input
-                type="number"
-                min="0"
-                max="2000000"
-                step="10000"
-                value={bequest}
-                onChange={(e) => setBequest(parseInt(e.target.value) || 0)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-                placeholder="Enter bequest amount"
-              />
-            </div>
-
-            {/* Strategy Optimization Inputs */}
-            <div style={inputGroupStyle}>
-              <label style={labelStyle}>Target Spending: ${(targetSpend || 0).toLocaleString()}/yr</label>
-              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
-                Annual spending goal in retirement (real dollars). Strategy will optimize to achieve this.
-              </div>
-              <input
-                type="number"
-                min="20000"
-                max="200000"
-                step="1000"
-                value={targetSpend}
-                onChange={(e) => setTargetSpend(parseInt(e.target.value) || annualExpenses)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-                placeholder="Annual spending target"
-              />
-            </div>
-
-            <div style={inputGroupStyle}>
-              <label style={labelStyle}>Annual Savings Budget: ${(annualSavingsBudget || 0).toLocaleString()}</label>
-              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.4' }}>
-                Total amount available annually for super + outside investments. Strategy will optimize the split.
-              </div>
-              <input
-                type="number"
-                min="10000"
-                max="200000"
-                step="5000"
-                value={annualSavingsBudget}
-                onChange={(e) => setAnnualSavingsBudget(parseInt(e.target.value) || 50000)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-                placeholder="Total savings budget"
-              />
-            </div>
-
-            {/* Compact Status Chip (T-011) */}
-            <div style={{
-              marginTop: 16,
-              display: 'inline-block',
-              padding: '8px 16px',
-              borderRadius: '20px',
-              fontSize: '14px',
-              fontWeight: '600',
-              backgroundColor: decision.earliestFireAge ? '#f0fdf4' : '#fef2f2',
-              color: decision.earliestFireAge ? '#059669' : '#dc2626',
-              border: `1px solid ${decision.earliestFireAge ? '#059669' : '#dc2626'}`,
-            }}>
-              {decision.earliestFireAge ? 
-                `Viable - earliest age ${decision.targetAge}` :
-                'Not viable'
-              }
-            </div>
-
-            {/* Sustainable spending summary (T-011 - fixed to use decision KPIs) */}
-            {decision.earliestFireAge && decision.kpis.S_pre && decision.kpis.S_post && (
-              <div style={{
-                marginTop: 12,
-                fontSize: '13px',
-                color: '#4b5563',
-                lineHeight: '1.5'
-              }}>
-                {Math.abs(decision.kpis.S_pre - decision.kpis.S_post) > 1000 ? (
-                  <div>Sustainable spending (DWZ): <strong>${Math.round(decision.kpis.S_pre).toLocaleString()} before super</strong> / <strong>${Math.round(decision.kpis.S_post).toLocaleString()} after super</strong></div>
-                ) : (
-                  <div>Sustainable spending (DWZ): <strong>${Math.round(decision.kpis.S_pre).toLocaleString()}/yr</strong></div>
-                )}
-              </div>
-            )}
-            
-            {/* Strategy Card */}
-            {strategyDisplay && (
-              <div style={{marginTop:12, padding:12, border:'1px solid #e5e7eb', borderRadius:8, backgroundColor:'#f8fafc'}}>
-                <div style={{fontSize:14, fontWeight:600, color:'#374151', marginBottom:8}}>
-                  {strategyDisplay.title}
-                </div>
-                
-                {strategyDisplay.viable ? (
-                  <>
-                    <div style={{fontSize:13, color:'#4b5563', marginBottom:12}}>
-                      {strategyDisplay.summary}
-                    </div>
-                    
-                    {strategyDisplay.splits.person1 ? (
-                      // Couple display (T-011)
-                      <dl style={{margin: 0, marginBottom: 12}}>
-                        {strategyDisplay.splits.person1.salarysacrifice > 0 ? (
-                          <div style={{marginBottom: 8}}>
-                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 1 salary sacrifice:</dt>
-                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                              ${strategyDisplay.splits.person1.salarysacrifice.toLocaleString()} 
-                              <span style={{fontSize: 11, color: '#6b7280', fontWeight: 400}}> (cap used {strategyDisplay.splits.person1.capUse}% incl. SG)</span>
-                            </dd>
-                          </div>
-                        ) : (
-                          <div style={{marginBottom: 8}}>
-                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 1:</dt>
-                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                              SG uses {strategyDisplay.splits.person1.capUse}% of cap
-                            </dd>
-                          </div>
-                        )}
-                        
-                        {strategyDisplay.splits.person2.salarysacrifice > 0 ? (
-                          <div style={{marginBottom: 8}}>
-                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 2 salary sacrifice:</dt>
-                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                              ${strategyDisplay.splits.person2.salarysacrifice.toLocaleString()} 
-                              <span style={{fontSize: 11, color: '#6b7280', fontWeight: 400}}> (cap used {strategyDisplay.splits.person2.capUse}% incl. SG)</span>
-                            </dd>
-                          </div>
-                        ) : (
-                          <div style={{marginBottom: 8}}>
-                            <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Person 2:</dt>
-                            <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                              SG uses {strategyDisplay.splits.person2.capUse}% of cap
-                            </dd>
-                          </div>
-                        )}
-                        
-                        <div>
-                          <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Joint outside:</dt>
-                          <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                            ${(strategyDisplay.splits.outside || 0).toLocaleString()}
-                          </dd>
-                        </div>
-                      </dl>
-                    ) : (
-                      // Single display (T-011)
-                      <dl style={{margin: 0, marginBottom: 12}}>
-                        <div style={{marginBottom: 8}}>
-                          {strategyDisplay.splits.salarysacrifice > 0 ? (
-                            <>
-                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Salary sacrifice:</dt>
-                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                                ${strategyDisplay.splits.salarysacrifice.toLocaleString()} 
-                                <span style={{fontSize: 11, color: '#6b7280', fontWeight: 400}}> (cap used {strategyDisplay.splits.capUse}% incl. SG)</span>
-                                {' • '}
-                              </dd>
-                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Outside:</dt>
-                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                                ${strategyDisplay.splits.outside?.toLocaleString()}
-                              </dd>
-                            </>
-                          ) : (
-                            <>
-                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Salary sacrifice:</dt>
-                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                                $0 (SG uses {strategyDisplay.splits.capUse}% of cap) • 
-                              </dd>
-                              <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Outside:</dt>
-                              <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                                ${strategyDisplay.splits.outside?.toLocaleString()}
-                              </dd>
-                            </>
-                          )}
-                        </div>
-                      </dl>
-                    )}
-                    
-                    <details style={{cursor:'pointer'}}>
-                      <summary style={{fontSize:13, color:'#4f46e5', fontWeight:500}}>
-                        Why this split? ▼
-                      </summary>
-                      <div style={{marginTop:8, fontSize:12, color:'#6b7280', lineHeight:'1.4'}}>
-                        {strategyDisplay.rationale?.map((reason, idx) => (
-                          <div key={idx} style={{marginBottom:4}}>• {reason}</div>
-                        ))}
-                        
-                        {/* Add dynamic bullet for SAC=$0 (T-011) */}
-                        {!strategyDisplay.splits.person1 && strategyDisplay.splits.salarysacrifice === 0 && (
-                          <div style={{marginBottom:4}}>
-                            • No salary sacrifice recommended because bridge liquidity dominates; keeping funds outside super enables earlier retirement.
-                          </div>
-                        )}
-                        
-                        {/* Add for couples if both have SAC=$0 */}
-                        {strategyDisplay.splits.person1 && 
-                         strategyDisplay.splits.person1.salarysacrifice === 0 && 
-                         strategyDisplay.splits.person2.salarysacrifice === 0 && (
-                          <div style={{marginBottom:4}}>
-                            • No salary sacrifice recommended because bridge liquidity dominates; keeping funds outside super enables earlier retirement.
-                          </div>
-                        )}
-                      </div>
-                    </details>
-                  </>
-                ) : (
-                  <div style={{fontSize:13, color:'#dc2626'}}>
-                    {strategyDisplay.message}
-                  </div>
-                )}
-              </div>
-            )}
-        
-        {/* DWZ vs SWR Comparison Strip removed - DWZ-only mode */}
-      </div>
 
       {/* Enhanced Results */}
       <div style={resultStyle}>
@@ -2732,6 +2168,38 @@ const AustralianFireCalculator = () => {
           Save settings locally or generate shareable links
         </div>
       </div>
+    </div>
+
+      {/* T-019: AdvancedDrawer component */}
+      <AdvancedDrawer
+        isOpen={showAdvancedDrawer}
+        onClose={() => setShowAdvancedDrawer(false)}
+        ageBandsEnabled={ageBandsEnabled}
+        setAgeBandsEnabled={setAgeBandsEnabled}
+        ageBandSettings={ageBandSettings}
+        setAgeBandSettings={setAgeBandSettings}
+        currentAge={currentAge}
+        lifeExpectancy={lifeExpectancy}
+        decision={decision}
+        expectedReturn={expectedReturn}
+        setExpectedReturn={setExpectedReturn}
+        inflationRate={inflationRate}
+        setInflationRate={setInflationRate}
+        investmentFees={investmentFees}
+        setInvestmentFees={setInvestmentFees}
+        planningAs={planningAs}
+        annualIncome={annualIncome}
+        setAnnualIncome={setAnnualIncome}
+        partnerB={partnerB}
+        setPartnerB={setPartnerB}
+        additionalSuperContributions={additionalSuperContributions}
+        setAdditionalSuperContributions={setAdditionalSuperContributions}
+        hasInsuranceInSuper={hasInsuranceInSuper}
+        setHasInsuranceInSuper={setHasInsuranceInSuper}
+        insurancePremiums={insurancePremiums}
+        setInsurancePremiums={setInsurancePremiums}
+        auRules={auRules}
+      />
     </div>
   );
 };
