@@ -12,6 +12,7 @@ import { mkPartner, mkHousehold } from './models/shapes';
 import { projectCouple } from './core/household';
 import { dwzPersonFromState, maxSpendDWZCouple, earliestFireAgeDWZCouple, getCoupleAtRetirementBalances } from './core/dwz_couples.js';
 import { GlobalBanner } from './components/GlobalBanner.jsx';
+import { formatCurrencyCompact } from './lib/formatNumber.js';
 
 // === DWZ helpers (real dollars) ===
 const EPS = 1e-6;
@@ -2526,10 +2527,10 @@ const AustralianFireCalculator = () => {
                       Bridge to Age 60: {calculations.bridgePeriodFeasible ? 'Covered' : 'Short'}
                     </div>
                     <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                      Need ${(calculations.bridgePeriodDetails.fundsNeeded/1000).toFixed(0)}k outside super for {calculations.bridgePeriodDetails.bridgeYears} years
+                      Need {formatCurrencyCompact(calculations.bridgePeriodDetails.fundsNeeded)} outside super for {calculations.bridgePeriodDetails.bridgeYears} years
                       {calculations.bridgePeriodFeasible 
-                        ? ` (have ${(calculations.bridgePeriodDetails.fundsAvailable/1000).toFixed(0)}k)`
-                        : ` (only have ${(calculations.bridgePeriodDetails.fundsAvailable/1000).toFixed(0)}k)`
+                        ? ` (have ${formatCurrencyCompact(calculations.bridgePeriodDetails.fundsAvailable)})`
+                        : ` (only have ${formatCurrencyCompact(calculations.bridgePeriodDetails.fundsAvailable)})`
                       }
                     </div>
                   </div>

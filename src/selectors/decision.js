@@ -215,7 +215,7 @@ export function decisionFromState(state, rules) {
       sustainableAnnual: solution.sustainableAnnual.toNumber(),
       bands: ageBandsEnabled ? bands.map(band => ({
         ...band,
-        multiplier: band.multiplier.toNumber()
+        multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber()
       })) : [], // T-018: Empty bands array when flat mode
       // Backward compatibility
       S_pre: S_pre.toNumber(),

@@ -2,6 +2,39 @@ import * as Money from '../lib/money.js';
 import { computeDwzStepped } from '../core/dwz_stepped.js';
 
 /**
+ * Helper function to determine phase for a given age from band schedule
+ * @param {Array} bands - Band schedule array
+ * @param {number} age - Age to look up
+ * @returns {string|undefined} Phase name ('go-go', 'slow-go', 'no-go') or undefined
+ */
+function phaseForAge(bands, age) {
+  if (!bands || !bands.length) return undefined;
+  
+  // Find the band that contains this age
+  const band = bands.find(b => {
+    const startAge = b.startAge || b.from;
+    const endAge = b.endAge || b.to;
+    // For the last band, include the end age; otherwise use exclusive end
+    const isLastBand = !bands.some(other => {
+      const otherStart = other.startAge || other.from;
+      return otherStart > startAge;
+    });
+    return age >= startAge && (isLastBand ? age <= endAge : age < endAge);
+  });
+  
+  if (!band) return undefined;
+  
+  // Map band names to phase names
+  const name = band.name || band.label;
+  if (name === 'Go-go') return 'go-go';
+  if (name === 'Slow-go') return 'slow-go';
+  if (name === 'No-go') return 'no-go';
+  if (name === 'Flat') return 'flat';
+  
+  return name?.toLowerCase(); // fallback
+}
+
+/**
  * Generate wealth depletion path data for charting using END-OF-YEAR balance convention
  * 
  * Shows the trajectory of total wealth from retirement to life expectancy,
@@ -20,10 +53,11 @@ import { computeDwzStepped } from '../core/dwz_stepped.js';
  * @param {number} params.S_pre - Pre-super spending rate
  * @param {number} params.S_post - Post-super spending rate
  * @param {number} params.bequest - Target bequest amount
- * @returns {Array} Array of { age, total, outside, super, spend } objects with END-OF-YEAR balances
+ * @param {Array} params.bandSchedule - Optional age band schedule for phase tagging
+ * @returns {Array} Array of { age, total, outside, super, spend, phase? } objects with END-OF-YEAR balances
  */
 export function generateDepletionPath(params) {
-  const { R, P, L, W_out, W_sup, r, S_pre, S_post, bequest = 0 } = params;
+  const { R, P, L, W_out, W_sup, r, S_pre, S_post, bequest = 0, bandSchedule } = params;
   
   const path = [];
   
@@ -80,13 +114,21 @@ export function generateDepletionPath(params) {
     // This is handled implicitly by the spending logic above
     
     // Record END-OF-YEAR balances for this age
-    path.push({
+    const point = {
       age,
       total: Money.toNumber(Money.add(endOutside, endSuper)),
       outside: Money.toNumber(endOutside),
       super: Money.toNumber(endSuper),
       spend: currentSpend
-    });
+    };
+    
+    // T-018R: Add phase tagging if band schedule is provided
+    const phase = phaseForAge(bandSchedule, age);
+    if (phase) {
+      point.phase = phase;
+    }
+    
+    path.push(point);
     
     // Update wealth for next iteration
     outsideWealth = endOutside;
@@ -145,7 +187,7 @@ export function depletionFromDecision(state, decision, rules) {
     }
   }
   
-  // Generate path
+  // Generate path with band schedule for phase tagging
   const path = generateDepletionPath({
     R,
     P,
@@ -155,7 +197,8 @@ export function depletionFromDecision(state, decision, rules) {
     r: returnRate,
     S_pre: kpis.S_pre,
     S_post: kpis.S_post,
-    bequest
+    bequest,
+    bandSchedule: kpis.bands || [] // T-018R: Pass band schedule for phase tagging
   });
   
   // Create markers and annotations

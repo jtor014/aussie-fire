@@ -82,7 +82,7 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
       )}
       {decision?.kpis?.constraint?.type === 'horizon' && (
         <div style={{fontSize: '14px', color: 'rgba(0,0,0,0.6)', marginTop: '4px'}}>
-          Earliest age is <strong>horizon-limited</strong>: total horizon/bequest is the bottleneck (life expectancy <strong>{decision.kpis.constraint.atAge}</strong> matters).
+          Earliest age is <strong>horizon-limited</strong>: total horizon/bequest is the bottleneck (life expectancy <strong>{decision.kpis.constraint.atAge}</strong>).
         </div>
       )}
     </div>
