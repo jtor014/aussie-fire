@@ -206,6 +206,72 @@ function generateCoupleStrategy(params) {
 
 
 /**
+ * Select normalized strategy summary for RecommendedSplitCard
+ * Handles recommended vs manual overrides with consistent field naming
+ * 
+ * @param {Object} strategy - Strategy object from dwzStrategyFromState 
+ * @param {Object} manualOverrides - Manual override values {salarySacrifice, outside}
+ * @returns {Object} Normalized strategy summary
+ */
+export function selectStrategySummary(strategy, manualOverrides = {}) {
+  const manual = {
+    salarySacrifice: manualOverrides.salarySacrifice || manualOverrides.additionalSuperContributions || 0,
+    outside: manualOverrides.outside || manualOverrides.outsideSavingsOverride || 0
+  };
+  
+  // Determine if manual overrides are active (any non-zero value)
+  const useManual = (manual.salarySacrifice + manual.outside) > 0;
+  
+  if (!strategy || !strategy.viable) {
+    return {
+      viable: false,
+      useManual: false,
+      recommended: { salarySacrifice: 0, outside: 0, capUsePct: 0 },
+      manual: { salarySacrifice: 0, outside: 0 },
+      display: { salarySacrifice: 0, outside: 0, capUsePct: 0 },
+      totalOut: 0
+    };
+  }
+  
+  const { recommendations, capAnalysis } = strategy;
+  
+  let recommended = { salarySacrifice: 0, outside: 0, capUsePct: 0 };
+  
+  if (recommendations.person1) {
+    // Couple - sum both persons
+    recommended = {
+      salarySacrifice: (recommendations.person1.salarysacrifice || 0) + 
+                      (recommendations.person2?.salarysacrifice || 0),
+      outside: recommendations.outsideInvestment?.amount || 0,
+      capUsePct: Math.max(recommendations.person1.capUtilization || 0, 
+                         recommendations.person2?.capUtilization || 0)
+    };
+  } else {
+    // Single - direct mapping with legacy field support
+    recommended = {
+      salarySacrifice: recommendations.salarysacrifice?.amount || 
+                      recommendations.sac || 0,
+      outside: recommendations.outsideInvestment?.amount || 
+              recommendations.outside || 0,
+      capUsePct: capAnalysis?.capUtilization || 0
+    };
+  }
+  
+  const display = useManual ? manual : recommended;
+  const totalOut = display.salarySacrifice + display.outside;
+  
+  return {
+    viable: strategy.viable,
+    useManual,
+    recommended,
+    manual,
+    display,
+    totalOut,
+    capUsePct: useManual ? 0 : recommended.capUsePct // Manual doesn't have cap calculation
+  };
+}
+
+/**
  * Get display-ready strategy data for UI components
  * 
  * @param {Object} strategy - Strategy object from dwzStrategyFromState
