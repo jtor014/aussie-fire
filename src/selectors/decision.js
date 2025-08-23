@@ -80,16 +80,24 @@ export function decisionFromState(state, rules) {
         W_out = W_out.mul(growthFactor).add(annualSavings.mul(annuityFactor));
       }
       
-      // Super growth with contributions
+      // Super growth with contributions and insurance premiums
       const superContribRate = new Decimal(0.115);
       const superContribs = netIncome.mul(superContribRate).add(state.additionalSuperContributions || 0);
+      const superInsurancePremium = new Decimal(state.superInsurancePremium || 0);
       
-      if (realReturn.abs().lt(1e-9)) {
-        W_sup = W_sup.add(superContribs.mul(yearsToRetirement));
-      } else {
-        const growthFactor = realReturn.add(1).pow(yearsToRetirement);
-        const annuityFactor = growthFactor.sub(1).div(realReturn);
-        W_sup = W_sup.mul(growthFactor).add(superContribs.mul(annuityFactor));
+      // Project super balance year by year to handle insurance premiums correctly
+      for (let year = 1; year <= yearsToRetirement; year++) {
+        // Apply return to current balance
+        W_sup = W_sup.mul(realReturn.add(1));
+        // Add contributions
+        W_sup = W_sup.add(superContribs);
+        // Subtract insurance premiums (deducted pre-return next year)
+        W_sup = W_sup.sub(superInsurancePremium);
+        // Ensure super balance doesn't go negative
+        if (W_sup.lt(0)) {
+          W_sup = new Decimal(0);
+          break;
+        }
       }
     }
     

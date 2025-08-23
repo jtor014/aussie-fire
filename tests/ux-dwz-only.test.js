@@ -24,6 +24,8 @@ describe('T-015: DWZ-only UX Business Logic', () => {
     additionalSuperContributions: 0,
     hasInsuranceInSuper: false,
     insurancePremiums: { life: 0, tpd: 0, income: 0 },
+    // T-019: Super insurance premium (part of new UX)
+    superInsurancePremium: 0,
     expectedReturn: 8.5,
     investmentFees: 0.5,
     bequest: 0,
@@ -280,6 +282,30 @@ describe('T-015: DWZ-only UX Business Logic', () => {
       expect(() => {
         kpisFromState(stateWithNulls, auRules);
       }).not.toThrow();
+    });
+  });
+
+  describe('T-019 UX changes compatibility', () => {
+    it('should maintain DWZ logic consistency with new superInsurancePremium field', () => {
+      const stateWithoutInsurance = { ...baseState, superInsurancePremium: 0 };
+      const stateWithInsurance = { ...baseState, superInsurancePremium: 1500 };
+      
+      const decisionWithout = decisionFromState(stateWithoutInsurance, auRules);
+      const decisionWith = decisionFromState(stateWithInsurance, auRules);
+      
+      // Both should produce valid results
+      expect(decisionWithout).toBeDefined();
+      expect(decisionWith).toBeDefined();
+      
+      // Insurance should reduce sustainable spending
+      expect(decisionWith.kpis.sustainableAnnual)
+        .toBeLessThanOrEqual(decisionWithout.kpis.sustainableAnnual);
+      
+      // Should maintain DWZ logic consistency (earliest age calculation)
+      if (decisionWithout.earliestFireAge && decisionWith.earliestFireAge) {
+        expect(decisionWith.targetAge).toBe(decisionWith.earliestFireAge);
+        expect(decisionWithout.targetAge).toBe(decisionWithout.earliestFireAge);
+      }
     });
   });
 
