@@ -17,12 +17,16 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
 
   const { canRetireAtTarget, targetAge, earliestFireAge, kpis: decisionKpis } = decision;
   
-  // Helper function to format money values with thousands separators (T-011)
+  // T-022: Check viability - only show green if truly viable (both horizon + bridge)
+  const isViable = decisionKpis?.viable && earliestFireAge;
+  const bridge = decisionKpis?.bridge || {};
+  
+  // Helper function to format money values with thousands separators
   const formatMoney = (amount) => {
     return Math.round(amount).toLocaleString();
   };
   
-  // Banner styling with aria-live (T-011 accessibility)
+  // T-022: Banner styling based on viability (green only when fully viable)
   const bannerStyle = {
     width: '100%',
     padding: '16px 20px',
@@ -32,9 +36,9 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
     fontWeight: '600',
     textAlign: 'center',
     border: '2px solid',
-    backgroundColor: earliestFireAge ? '#dcfce7' : '#fef3c7',
-    borderColor: earliestFireAge ? '#16a34a' : '#f59e0b',
-    color: earliestFireAge ? '#166534' : '#92400e'
+    backgroundColor: isViable ? '#dcfce7' : '#fef3c7',
+    borderColor: isViable ? '#16a34a' : '#f59e0b',
+    color: isViable ? '#166534' : '#92400e'
   };
 
   const detailStyle = {
@@ -44,29 +48,54 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
     opacity: 0.9
   };
 
-  // T-015: DWZ-only mode - always show earliest retirement age
+  // T-022: Viability-gated messaging
   let mainMessage;
   let secondaryMessage = null;
 
-  if (earliestFireAge) {
+  if (isViable) {
+    // Green message: fully viable retirement
     const desiredSpend = formatMoney(decisionKpis.sustainableAnnual || decisionKpis.planSpend || 0);
     mainMessage = (
       <>
-        Earliest you can retire: <strong>{earliestFireAge}</strong> at <strong>${desiredSpend}/yr</strong> (L={lifeExpectancy}, Bequest=${formatMoney(bequest)})
+        🎯 You can retire at age <strong>{earliestFireAge}</strong> with Die-With-Zero
+      </>
+    );
+    secondaryMessage = (
+      <>
+        Sustainable spending: <strong>${desiredSpend}/yr</strong> (L={lifeExpectancy}, Bequest=${formatMoney(bequest)})
+      </>
+    );
+  } else if (decisionKpis?.earliestTheoreticalAge) {
+    // Amber message: theoretical age exists but bridge constraint fails
+    const theoreticalAge = decisionKpis.earliestTheoreticalAge;
+    const shortfall = bridge.shortfall || 0;
+    const years = bridge.years || 0;
+    const need = bridge.need || 0;
+    const have = bridge.have || 0;
+    
+    mainMessage = (
+      <>
+        ⚠️ Earliest theoretical age is <strong>{theoreticalAge}</strong>, but bridge is short by <strong>${formatMoney(shortfall)}</strong>
+      </>
+    );
+    secondaryMessage = (
+      <>
+        Need ${formatMoney(need)} for {years} years, have ${formatMoney(have)}. Increase outside savings or retire later.
       </>
     );
   } else {
-    mainMessage = <>Cannot achieve retirement with current settings</>;
+    // No viable retirement found
+    mainMessage = <>❌ Cannot achieve retirement with current settings</>;
   }
 
-  // T-015: Secondary line with single sustainable spending amount
-  if (decisionKpis.sustainableAnnual) {
-    const sustainableSpend = formatMoney(decisionKpis.sustainableAnnual);
-    secondaryMessage = (
-      <>
-        Sustainable (DWZ): <strong>${sustainableSpend}/yr</strong>
-      </>
-    );
+  // T-022: Constraint-specific messaging
+  let constraintMessage = null;
+  if (isViable && decisionKpis?.limiting) {
+    if (decisionKpis.limiting === 'bridge') {
+      constraintMessage = `Bridge-limited: outside savings bottleneck until super unlock at age ${decision.preservationAge}.`;
+    } else if (decisionKpis.limiting === 'horizon') {
+      constraintMessage = `Horizon-limited: total horizon/bequest bottleneck (life expectancy ${lifeExpectancy}).`;
+    }
   }
 
   return (
@@ -74,15 +103,10 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
       <div>{mainMessage}</div>
       {secondaryMessage && <div style={detailStyle}>{secondaryMessage}</div>}
       
-      {/* T-017: constraint caption under main line */}
-      {decision?.kpis?.constraint?.type === 'bridge' && (
+      {/* T-022: New constraint messaging */}
+      {constraintMessage && (
         <div style={{fontSize: '14px', color: 'rgba(0,0,0,0.6)', marginTop: '4px'}}>
-          Earliest age is <strong>bridge-limited</strong>: outside savings are the bottleneck until super unlock at <strong>age {decision.kpis.constraint.atAge}</strong>.
-        </div>
-      )}
-      {decision?.kpis?.constraint?.type === 'horizon' && (
-        <div style={{fontSize: '14px', color: 'rgba(0,0,0,0.6)', marginTop: '4px'}}>
-          Earliest age is <strong>horizon-limited</strong>: total horizon/bequest is the bottleneck (life expectancy <strong>{decision.kpis.constraint.atAge}</strong>).
+          {constraintMessage}
         </div>
       )}
     </div>

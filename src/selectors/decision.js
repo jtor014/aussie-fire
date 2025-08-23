@@ -1,6 +1,6 @@
 import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz_single.js';
 import { computeDwzStepped, isSteppedPlanViable, earliestFireAgeSteppedDWZ, getSteppedConstraint } from '../core/dwz_stepped.js';
-import { solveSustainableSpending, findEarliestRetirement, checkConstraintViolations, analyzeBindingConstraint, makeBandAtAge } from '../core/dwz_age_band.js';
+import { solveSustainableSpending, findEarliestRetirement, findEarliestViableAge, checkConstraintViolations, analyzeBindingConstraint, makeBandAtAge } from '../core/dwz_age_band.js';
 import { normalizeBandSettings, createFlatSchedule, createAgeBandedSchedule } from '../lib/validation/ageBands.js';
 import { getPreservationAge } from '../core/preservation.js';
 import Decimal from 'decimal.js-light';
@@ -125,27 +125,24 @@ export function decisionFromState(state, rules) {
     }
   };
 
-  // Find earliest retirement using custom bands
-  const earliestResult = findEarliestRetirement({
+  // T-022: Find earliest viable retirement age that satisfies BOTH horizon and bridge constraints
+  const { outsideWealth: outsideAtEarliest, superWealth: superAtEarliest } = getWealthAtAge(state.currentAge);
+  
+  const viabilityResult = findEarliestViableAge({
     currentAge: state.currentAge,
-    maxRetirementAge: Math.min(P, lifeExpectancy - 5), // Don't retire too close to death
-    currentOutside: new Decimal(state.currentSavings || 0),
-    currentSuper: new Decimal(state.currentSuper || 0),
-    annualSavings: new Decimal(Math.max(0, (state.annualIncome || 0) * 0.675 - (state.annualExpenses || 0))),
-    annualSuperContrib: new Decimal((state.annualIncome || 0) * 0.115 + (state.additionalSuperContributions || 0)),
-    nominalReturn: nominalReturn,
-    inflation: inflation,
     lifeExpectancy,
     preservationAge: P,
+    outsideAtRetirement: outsideAtEarliest,
+    superAtRetirement: superAtEarliest,
+    realReturn,
     bequest: new Decimal(bequest),
-    minSpending: new Decimal(annualExpenses),
-    bandsGenerator
+    maxSearchAge: Math.min(P + 20, lifeExpectancy - 5)
   });
 
-  // T-015: Always use earliest age (no pinned mode)
-  const targetAge = earliestResult.earliestAge || retirementAge;
+  // Use viable age if found, otherwise fall back to theoretical age or retirement age
+  const targetAge = viabilityResult.earliestViableAge || viabilityResult.earliestTheoreticalAge || retirementAge;
 
-  // Get wealth at target age
+  // Get wealth at target age for final solution
   const { outsideWealth, superWealth } = getWealthAtAge(targetAge);
 
   // Solve sustainable spending at target age with custom bands
@@ -157,11 +154,11 @@ export function decisionFromState(state, rules) {
     preservationAge: P,
     realReturn,
     bequest: new Decimal(bequest),
-    bands: bands // T-018: Pass custom bands (flat or age-banded)
+    bands: bands
   });
 
   // Check if viable at target spending level
-  const canRetireAtTarget = solution.sustainableAnnual.gte(annualExpenses);
+  const canRetireAtTarget = viabilityResult.viable && solution.sustainableAnnual.gte(annualExpenses);
 
   // Check constraint violations
   const constraints = checkConstraintViolations({
@@ -205,12 +202,12 @@ export function decisionFromState(state, rules) {
     S_post = solution.sustainableAnnual.mul(postBand.multiplier);
   }
 
-  // T-021: Use unified bridge assessment from solver
+  // T-022: Use viability result for constraint analysis
   let constraint = null;
-  if (earliestResult.earliestAge && solution.sustainableAnnual.gt(0)) {
+  if (viabilityResult.earliestViableAge && solution.sustainableAnnual.gt(0)) {
     const bandAtAge = makeBandAtAge(solutionBands);
     constraint = analyzeBindingConstraint({
-      R: earliestResult.earliestAge,
+      R: viabilityResult.earliestViableAge,
       L: lifeExpectancy,
       preservationAge: P,
       realReturn: realReturn.toNumber(),
@@ -224,27 +221,37 @@ export function decisionFromState(state, rules) {
   return {
     canRetireAtTarget,
     targetAge,
-    earliestFireAge: earliestResult.earliestAge,
+    // T-022: Use viable age for backward compatibility, expose theoretical age separately
+    earliestFireAge: viabilityResult.earliestViableAge,
+    earliestTheoreticalAge: viabilityResult.earliestTheoreticalAge,
     shortfallPhase,
     kpis: {
+      // T-022: Expose unified viability data
+      viable: viabilityResult.viable,
+      earliestViableAge: viabilityResult.earliestViableAge,
+      earliestTheoreticalAge: viabilityResult.earliestTheoreticalAge,
+      limiting: viabilityResult.limiting,
+      // T-022: Unified bridge assessment from viability result
+      bridge: viabilityResult.bridge,
+      
       sustainableAnnual: solution.sustainableAnnual.toNumber(),
       bands: ageBandsEnabled ? bands.map(band => ({
         ...band,
         multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber()
-      })) : [], // T-018: Empty bands array when flat mode
+      })) : [],
       // Backward compatibility
       S_pre: S_pre.toNumber(),
       S_post: S_post.toNumber(),
       planSpend: S_pre.gt(S_post) ? S_pre.toNumber() : S_post.toNumber(),
-      // T-017: Binding constraint analysis
+      // T-017: Binding constraint analysis  
       constraint,
-      // T-021: Bridge assessment from unified solver
-      bridgeAssessment: solution.bridgeAssessment
+      // T-021: Keep bridgeAssessment for backward compatibility
+      bridgeAssessment: viabilityResult.bridge
     },
     bequest,
     preservationAge: P,
-    constraintAtEarliest: earliestResult.earliestAge ? {
-      bridgeViable: constraints.bridgeViable,
+    constraintAtEarliest: viabilityResult.earliestViableAge ? {
+      bridgeViable: viabilityResult.bridge.status === 'covered',
       postViable: constraints.postViable
     } : null,
     // T-018: Age-band settings and warnings
