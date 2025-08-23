@@ -34,7 +34,20 @@ The `decision` prop should contain:
   kpis: {
     S_pre: number,                // Sustainable spending before super access
     S_post: number,               // Sustainable spending after super access
-    planSpend: number             // Overall planned spending amount
+    planSpend: number,            // Overall planned spending amount
+    constraint: {                 // T-021: Binding constraint analysis
+      type: string,               // 'bridge' or 'horizon'
+      atAge: number,              // Age where constraint binds (60 for bridge, lifeExpectancy for horizon)
+      sBridgeMax: number,         // Maximum bridge-sustainable spending
+      sTotalMax: number,          // Maximum total-sustainable spending  
+      epsilon: number             // Tolerance for constraint classification
+    },
+    bridgeAssessment: {           // T-021: Unified bridge assessment
+      neededPV: number,           // Present value of bridge spending needed
+      havePV: number,             // Present value of outside wealth available
+      years: number,              // Bridge period length (preservationAge - targetAge)
+      covered: boolean            // Whether bridge period is funded
+    }
   },
   dwzPlanningMode: string         // Planning mode from decision logic
 }
@@ -91,9 +104,28 @@ The component uses inline styles with:
 
 The GlobalBanner integrates with:
 
-1. **Decision Selector** (`src/selectors/decision.js`) - Provides decision object
-2. **Main Calculator** (`src/AustralianFireCalculator.jsx`) - Supplies planning mode state
-3. **DWZ Engine** - Uses sustainable spending calculations from DWZ methodology
+1. **Decision Selector** (`src/selectors/decision.js`) - Provides unified decision object with bridge assessment
+2. **Age-Band Solver** (`src/core/dwz_age_band.js`) - Uses constraint classification for display logic  
+3. **Main Calculator** (`src/AustralianFireCalculator.jsx`) - Supplies planning mode state
+4. **Bridge Engine** (`src/core/bridge.js`) - Accesses unified bridge assessment for constraint messaging
+
+## T-021: Bridge Constraint Display
+
+The GlobalBanner now shows constraint-specific messaging based on the unified bridge assessment:
+
+### Bridge-Limited Display
+```
+🎯 You can retire at age 45 with Die-With-Zero
+Earliest age is bridge-limited: outside savings are the bottleneck until super unlock at age 60.
+```
+
+### Horizon-Limited Display  
+```
+🎯 You can retire at age 45 with Die-With-Zero
+Earliest age is horizon-limited: total horizon/bequest is the bottleneck (life expectancy 85).
+```
+
+This ensures the banner and bridge chip show consistent information - no more contradictory "horizon-limited" banner with "Short" bridge chip.
 
 ## Examples
 

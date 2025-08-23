@@ -1,13 +1,23 @@
-# ✅ COMPLETED: DWZ-Only Mode Transformation (T-010) + Couples Mode
+# ✅ COMPLETED: Bridge Math Consistency (T-021) + DWZ-Only Mode (T-010)
 
-## ✅ Major Update: Die-With-Zero Primary Methodology
+## ✅ Latest: Bridge Math Consistency Fix (T-021)
+
+### Critical Bug Fix:
+- ✅ **Unified Bridge Assessment**: Fixed inconsistency where GlobalBanner said "horizon-limited" while BridgeChip said "Short"
+- ✅ **Single Source of Truth**: Both components now use same bridge calculation from age-band solver
+- ✅ **Enhanced Age-Band Solver**: Integrated bridge computation with age-banded spending schedules
+- ✅ **Preservation Age Consistency**: Proper age-specific lookup across all components
+- ✅ **Comprehensive Testing**: 25+ bridge consistency tests and golden scenario validation
+- ✅ **Architecture Improvement**: Cleaner separation between UI components and calculation engine
+
+## ✅ Major Update: Die-With-Zero Primary Methodology (T-010)
 
 ### What We Built:
 - ✅ **DWZ-Only Mode**: Removed Safe Withdrawal Rate toggle - Die-With-Zero is now the primary planning approach
 - ✅ **Global Results Banner**: Real-time retirement status prominently displayed under page title  
 - ✅ **Dynamic Chart Markers**: Conditional markers based on planning mode (earliest FIRE vs target age)
 - ✅ **Robust Foundation**: `/src/core/` pure functions, `/src/data/` config, `/src/models/` types
-- ✅ **Comprehensive Testing**: 17 unit tests covering all calculation logic
+- ✅ **Comprehensive Testing**: 280+ unit tests covering all calculation logic
 - ✅ **Couples Mode**: Full per-partner support with unified components
 - ✅ **Zero Regressions**: All existing functionality preserved exactly
 
@@ -19,14 +29,16 @@ src/
 ├── core/           # ✅ Pure calculation functions
 │   ├── tax.js      # Income tax, Medicare Levy, HECS calculations
 │   ├── super.js    # Superannuation contributions and caps
-│   ├── bridge.js   # Early retirement bridge period analysis
+│   ├── bridge.js   # T-021: Unified bridge period analysis
+│   ├── age_bands.js # T-021: Age-band spending schedule generation
+│   ├── dwz_age_band.js # T-021: Enhanced age-band solver with bridge integration
 │   ├── dwz_single.js   # Die-With-Zero single person calculations
 │   ├── dwz_couples.js  # Die-With-Zero couples calculations
 │   ├── dwz_stepped.js  # Stepped spending pre/post super access
 │   └── optimizer/  # Contribution split optimization
 │       └── split_optimizer.js
 ├── selectors/      # ✅ UI State Management
-│   ├── decision.js  # DWZ decision logic for UI
+│   ├── decision.js  # T-021: Unified DWZ decision logic with bridge assessment
 │   ├── kpis.js     # Key performance indicators (DWZ-only)
 │   ├── strategy.js # Optimization strategy display
 │   └── depletion.js # Wealth depletion projections
@@ -34,8 +46,10 @@ src/
 │   └── au_rules.json # Australian tax brackets, super caps, etc
 ├── models/         # ✅ Data shape factories
 │   └── shapes.js   # mkPartner(), mkHousehold() functions
-├── tests/          # ✅ Comprehensive test coverage (23 tests)
-└── AustralianFireCalculator.jsx # ✅ DWZ-only UI component
+├── tests/          # ✅ Comprehensive test coverage (280+ tests)
+│   ├── bridge-consistency-*.test.js # T-021: Bridge consistency tests
+│   └── [existing test files]
+└── AustralianFireCalculator.jsx # ✅ DWZ-only UI with unified bridge data
 ```
 
 ## ✅ COMPLETED PHASES

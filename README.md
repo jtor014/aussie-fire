@@ -126,9 +126,10 @@ All financial calculations use `decimal.js-light` (v2.5.1) to ensure precision a
 - **Enhanced Chart Visualization**: ✅ Complete - Age-band transition markers and spending annotations
 - **DWZ-Only Interface**: ✅ Complete - Simplified UI with earliest FIRE focus, removed legacy target flows
 - **Global Banner Integration**: ✅ Complete - Shows base sustainable spending with age-band context
-- **Bridge Constraint Solver**: ✅ Working - Enforces outside-money-only constraint during bridge period
+- **Bridge Constraint Solver**: ✅ Complete - Enforces outside-money-only constraint during bridge period
+- **Bridge Math Consistency**: ✅ Complete - Unified bridge assessment ensures banner and chip consistency
 - **Bequest Planning**: ✅ Complete - Comprehensive bequest target support across all scenarios
-- **Test Coverage**: ✅ 200+ tests passing, including age-band depletion and chart marker validation
+- **Test Coverage**: ✅ 280+ tests passing, including bridge consistency validation
 
 ### Future Enhancements
 

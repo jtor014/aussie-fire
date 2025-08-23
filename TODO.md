@@ -1,6 +1,13 @@
 # TODO List for Australian FIRE Calculator
 
-## ✅ COMPLETED - Foundation Architecture
+## ✅ COMPLETED - Foundation Architecture  
+- ✅ **T-021: BRIDGE MATH CONSISTENCY FIX** (Aug 2025) - 🔧 CRITICAL FIX
+  - ✅ **Unified Bridge Assessment** - Single source of truth for bridge calculations
+  - ✅ **Consistent UI Components** - GlobalBanner and BridgeChip now use same math
+  - ✅ **Enhanced Age-Band Solver** - Integrated bridge computation with age-banded spending
+  - ✅ **Preservation Age Consistency** - Proper age-specific lookup across all components
+  - ✅ **Comprehensive Testing** - 25+ bridge consistency and golden scenario tests
+  - ✅ **Bug Fixes** - Fixed bridge calculation loop causing incorrect spending calculations
 - ✅ **T-010: DWZ-ONLY MODE TRANSFORMATION** (Aug 2025) - 🚀 MAJOR UPDATE
   - ✅ **Global Results Banner** - Real-time retirement status under page title
   - ✅ **DWZ Always On** - Removed SWR toggle, DWZ settings permanently visible

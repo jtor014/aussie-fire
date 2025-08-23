@@ -5,6 +5,36 @@ All notable changes to the Australian FIRE Calculator project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-08-23
+
+### Major Changes - T-021: Bridge Math Consistency Fix
+- **BREAKING**: Fixed bridge calculation inconsistency where GlobalBanner and BridgeChip used different math
+- **Bridge Unification**: Both components now use unified bridge assessment from age-band solver
+
+### Added
+- **Unified Bridge System**: Created single source of truth for bridge calculations
+- **Enhanced Bridge Logic**: Added `buildSpendingSchedule()` and `computeBridgeRequirement()` functions
+- **Preservation Age Consistency**: Proper age-specific preservation age lookup across all components
+- **Comprehensive Testing**: Added 25+ bridge consistency tests and golden scenario validation
+
+### Changed
+- **GlobalBanner**: Now reads constraint type from unified age-band engine
+- **BridgeChip**: Now uses unified bridge assessment instead of legacy kpis calculation
+- **Decision Selector**: Enhanced with unified bridge assessment from solver
+- **Age-Band Solver**: Now computes and returns bridge data using age-banded spending
+
+### Fixed
+- **Bridge Calculation Bug**: Fixed loop condition causing incorrect bridge spending calculations
+- **Inconsistent Messaging**: Eliminated contradictory "horizon-limited" banner + "Short" chip displays
+- **Preservation Age Sources**: Unified preservation age lookup to prevent calculation discrepancies
+
+### Technical
+- Enhanced `src/core/dwz_age_band.js` with unified bridge computation
+- Added `src/core/age_bands.js` buildSpendingSchedule function  
+- Fixed `src/core/bridge.js` computeBridgeRequirement loop logic
+- Updated `src/selectors/decision.js` with proper preservation age handling
+- Created comprehensive test suites: `tests/bridge-consistency-*.test.js`
+
 ## [0.4.0] - 2025-08-23
 
 ### Major Changes - T-016: DWZ-Only Polish
