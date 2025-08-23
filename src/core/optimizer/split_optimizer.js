@@ -1,469 +1,425 @@
-import * as Money from '../../lib/money.js';
-import { computeDwzStepped, isSteppedPlanViable } from '../dwz_stepped.js';
+/**
+ * Contribution Split Optimizer for DWZ Age-Band Engine
+ * 
+ * Optimizes the split between salary sacrifice to super vs outside ETF investments
+ * to minimize the earliest retirement age for a given target spending level.
+ * 
+ * Uses grid search with pruning for performance while respecting contribution caps,
+ * tax treatment, and insurance deductions.
+ */
+import Decimal from 'decimal.js-light';
+import { solveSustainableSpending, findEarliestRetirement } from '../dwz_age_band.js';
 
 /**
- * DWZ Contribution Split Optimizer
- * 
- * Optimizes the allocation between salary sacrifice (super) and outside investments
- * to achieve the earliest possible retirement at a target spending level.
- * 
- * Uses grid search to find optimal split considering:
- * - Australian superannuation contribution caps
- * - Insurance premium deductions
- * - DWZ stepped spending methodology with bequest support
+ * Calculate headroom available for salary sacrifice contributions
+ * @param {Object} params
+ * @param {number} params.salary - Annual salary
+ * @param {number} params.sgPct - Superannuation Guarantee percentage (e.g., 0.115 for 11.5%)
+ * @param {number} params.concessionalCap - Annual concessional contributions cap
+ * @returns {number} Available headroom for additional salary sacrifice
  */
+export function computeHeadroom({ salary, sgPct = 0.115, concessionalCap = 30000 }) {
+  const sgContribution = Math.min(salary * sgPct, concessionalCap);
+  return Math.max(0, concessionalCap - sgContribution);
+}
 
 /**
- * Evaluate a single person's contribution split for earliest retirement
- * 
- * @param {number} alpha - Fraction of available savings to salary sacrifice [0,1]
- * @param {Object} params - Optimization parameters
- * @returns {Object} { earliestAge, capUse, sacAmount, outsideAmount, viable }
+ * Apply 15% contributions tax to salary sacrifice amount
+ * @param {number} sac - Pre-tax salary sacrifice amount
+ * @returns {number} Net amount landing in super after contributions tax
  */
-export function evaluateSplitSingle(alpha, params) {
-  const {
+export function applyContribTax(sac) {
+  return sac * 0.85; // 15% contributions tax
+}
+
+/**
+ * Project wealth balances to retirement age R
+ * @param {Object} household - Household parameters
+ * @param {number} sac1 - Person 1 annual salary sacrifice
+ * @param {number} sac2 - Person 2 annual salary sacrifice (0 for single)
+ * @param {number} outside - Annual outside investment
+ * @param {Object} assumptions - Return rates and other assumptions
+ * @returns {Object} Projected balances at retirement
+ */
+export function projectBalancesToR(household, sac1, sac2, outside, assumptions) {
+  const { 
+    currentAge, 
+    retirementAge, 
+    currentOutside = 0, 
+    currentSuper1 = 0, 
+    currentSuper2 = 0,
+    insurance1 = 0,
+    insurance2 = 0,
+    salary1 = 0,
+    salary2 = 0,
+    sgPct = 0.115
+  } = household;
+  
+  const { nominalReturn, inflation } = assumptions;
+  const realReturn = nominalReturn.sub(inflation).div(inflation.add(1));
+  
+  const yearsToRetirement = retirementAge - currentAge;
+  
+  if (yearsToRetirement <= 0) {
+    return {
+      outsideWealth: new Decimal(currentOutside),
+      superWealth1: new Decimal(currentSuper1),
+      superWealth2: new Decimal(currentSuper2)
+    };
+  }
+  
+  // Calculate total annual contributions
+  const sgContrib1 = salary1 * sgPct;
+  const sgContrib2 = salary2 * sgPct;
+  const totalSuperContrib1 = sgContrib1 + applyContribTax(sac1);
+  const totalSuperContrib2 = sgContrib2 + applyContribTax(sac2);
+  
+  let projectedOutside = new Decimal(currentOutside);
+  let projectedSuper1 = new Decimal(currentSuper1);
+  let projectedSuper2 = new Decimal(currentSuper2);
+  
+  // Handle zero return case
+  if (realReturn.abs().lt(1e-9)) {
+    projectedOutside = projectedOutside.add(new Decimal(outside).mul(yearsToRetirement));
+    projectedSuper1 = projectedSuper1.add(new Decimal(totalSuperContrib1 - insurance1).mul(yearsToRetirement));
+    projectedSuper2 = projectedSuper2.add(new Decimal(totalSuperContrib2 - insurance2).mul(yearsToRetirement));
+  } else {
+    const growthFactor = realReturn.add(1).pow(yearsToRetirement);
+    const annuityFactor = growthFactor.sub(1).div(realReturn);
+    
+    // Project outside wealth
+    projectedOutside = projectedOutside.mul(growthFactor).add(new Decimal(outside).mul(annuityFactor));
+    
+    // Project super wealth (net of insurance)
+    const netSuperContrib1 = Math.max(0, totalSuperContrib1 - insurance1);
+    const netSuperContrib2 = Math.max(0, totalSuperContrib2 - insurance2);
+    
+    projectedSuper1 = projectedSuper1.mul(growthFactor).add(new Decimal(netSuperContrib1).mul(annuityFactor));
+    projectedSuper2 = projectedSuper2.mul(growthFactor).add(new Decimal(netSuperContrib2).mul(annuityFactor));
+  }
+  
+  return {
+    outsideWealth: projectedOutside,
+    superWealth1: projectedSuper1,
+    superWealth2: projectedSuper2
+  };
+}
+
+/**
+ * Evaluate earliest retirement age for given wealth projection
+ * @param {Object} params - Household and financial parameters
+ * @param {Object} projectedWealth - Wealth balances at retirement
+ * @param {Object} assumptions - Return and other assumptions
+ * @returns {Object} Earliest retirement evaluation result
+ */
+export function evaluateEarliestAge(params, projectedWealth, assumptions) {
+  const { 
+    currentAge, 
+    lifeExpectancy, 
+    preservationAge, 
+    targetSpend = 50000,
+    bequest = 0 
+  } = params;
+  
+  const { nominalReturn, inflation } = assumptions;
+  const realReturn = nominalReturn.sub(inflation).div(inflation.add(1));
+  
+  // For couples, combine super wealth and use younger person's preservation age
+  const totalSuperWealth = projectedWealth.superWealth1.add(projectedWealth.superWealth2 || 0);
+  
+  // Find earliest retirement age
+  const earliestResult = findEarliestRetirement({
     currentAge,
-    targetSpend,
-    annualSavingsBudget,
-    bequest,
+    maxRetirementAge: Math.min(preservationAge, lifeExpectancy - 5),
+    currentOutside: projectedWealth.outsideWealth,
+    currentSuper: totalSuperWealth,
+    annualSavings: new Decimal(0), // Already projected
+    annualSuperContrib: new Decimal(0), // Already projected
+    nominalReturn,
+    inflation,
     lifeExpectancy,
-    currentSavings,
-    currentSuper,
-    annualIncome,
-    rReal,
     preservationAge,
-    
-    // Super settings
-    sgRate,                    // Superannuation Guarantee rate (e.g. 0.12)
-    concessionalCap,          // Annual concessional contribution cap
-    superInsurance,           // Annual insurance premiums in super
-    contributionsTaxRate      // Tax on concessional contributions (15%)
-  } = params;
-
-  // Calculate employer SG contribution
-  const sgContribution = annualIncome * sgRate;
-  
-  // Calculate available headroom in concessional cap
-  const concessionalHeadroom = Math.max(0, concessionalCap - sgContribution);
-  
-  // Calculate salary sacrifice amount (clamped to headroom)
-  const desiredSAC = alpha * annualSavingsBudget;
-  const actualSAC = Math.min(desiredSAC, concessionalHeadroom);
-  const sacOverflow = desiredSAC - actualSAC;
-  
-  // Calculate contributions after 15% tax
-  const netSGContribution = sgContribution * (1 - contributionsTaxRate);
-  const netSACContribution = actualSAC * (1 - contributionsTaxRate);
-  
-  // Calculate outside investment amount
-  const outsideAmount = annualSavingsBudget - actualSAC + sacOverflow;
-  
-  // Calculate cap utilization
-  const totalConcessional = sgContribution + actualSAC;
-  const capUse = totalConcessional / concessionalCap;
-  
-  // Simulate wealth accumulation to find earliest retirement age
-  const earliestAge = findEarliestRetirementAge({
-    currentAge,
-    targetSpend,
-    bequest,
-    lifeExpectancy,
-    currentSavings,
-    currentSuper,
-    annualOutsideContrib: outsideAmount,
-    annualSuperContrib: netSGContribution + netSACContribution,
-    superInsurance,
-    rReal,
-    preservationAge
+    bequest: new Decimal(bequest),
+    minSpending: new Decimal(targetSpend)
   });
-
-  return {
-    earliestAge,
-    capUse,
-    sacAmount: actualSAC,
-    outsideAmount,
-    viable: earliestAge !== null,
-    totalConcessional,
-    overflow: sacOverflow
-  };
-}
-
-/**
- * Evaluate a couple's contribution split for earliest retirement
- * 
- * @param {number} alpha1 - Person 1's salary sacrifice fraction [0,1]
- * @param {number} alpha2 - Person 2's salary sacrifice fraction [0,1]  
- * @param {Object} params - Couple optimization parameters
- * @returns {Object} { earliestAge, capUse1, capUse2, sac1, sac2, outside, viable }
- */
-export function evaluateSplitCouple(alpha1, alpha2, params) {
-  const {
-    currentAge,
-    targetSpend,
-    annualSavingsBudget,
-    bequest,
-    lifeExpectancy,
-    currentSavings,
-    currentSuper1,
-    currentSuper2,
-    annualIncome1,
-    annualIncome2,
-    rReal,
-    preservationAge1,
-    preservationAge2,
-    
-    // Super settings per person
-    sgRate,
-    concessionalCap,
-    superInsurance1,
-    superInsurance2,
-    contributionsTaxRate
-  } = params;
-
-  // Calculate SG contributions for both partners
-  const sgContrib1 = annualIncome1 * sgRate;
-  const sgContrib2 = annualIncome2 * sgRate;
-  
-  // Calculate individual headroom
-  const headroom1 = Math.max(0, concessionalCap - sgContrib1);
-  const headroom2 = Math.max(0, concessionalCap - sgContrib2);
-  
-  // Calculate salary sacrifice amounts (clamped to individual headroom)
-  const desiredSAC1 = alpha1 * annualSavingsBudget * 0.5; // Split budget between partners
-  const desiredSAC2 = alpha2 * annualSavingsBudget * 0.5;
-  
-  const actualSAC1 = Math.min(desiredSAC1, headroom1);
-  const actualSAC2 = Math.min(desiredSAC2, headroom2);
-  
-  const overflow1 = desiredSAC1 - actualSAC1;
-  const overflow2 = desiredSAC2 - actualSAC2;
-  
-  // Calculate net contributions after 15% tax
-  const netSG1 = sgContrib1 * (1 - contributionsTaxRate);
-  const netSG2 = sgContrib2 * (1 - contributionsTaxRate);
-  const netSAC1 = actualSAC1 * (1 - contributionsTaxRate);
-  const netSAC2 = actualSAC2 * (1 - contributionsTaxRate);
-  
-  // Calculate joint outside amount (includes overflow)
-  const outsideAmount = annualSavingsBudget - actualSAC1 - actualSAC2 + overflow1 + overflow2;
-  
-  // Calculate cap utilization
-  const capUse1 = (sgContrib1 + actualSAC1) / concessionalCap;
-  const capUse2 = (sgContrib2 + actualSAC2) / concessionalCap;
-  
-  // Simulate wealth accumulation for couple
-  const earliestAge = findEarliestRetirementAgeCouple({
-    currentAge,
-    targetSpend,
-    bequest,
-    lifeExpectancy,
-    currentSavings,
-    currentSuper1,
-    currentSuper2,
-    annualOutsideContrib: outsideAmount,
-    annualSuperContrib1: netSG1 + netSAC1,
-    annualSuperContrib2: netSG2 + netSAC2,
-    superInsurance1,
-    superInsurance2,
-    rReal,
-    preservationAge1,
-    preservationAge2
-  });
-
-  return {
-    earliestAge,
-    capUse1,
-    capUse2,
-    sac1: actualSAC1,
-    sac2: actualSAC2,
-    outside: outsideAmount,
-    viable: earliestAge !== null,
-    overflow1,
-    overflow2
-  };
-}
-
-/**
- * Find earliest retirement age for single person using binary search
- */
-function findEarliestRetirementAge(params) {
-  const {
-    currentAge,
-    targetSpend,
-    bequest,
-    lifeExpectancy,
-    currentSavings,
-    currentSuper,
-    annualOutsideContrib,
-    annualSuperContrib,
-    superInsurance,
-    rReal,
-    preservationAge
-  } = params;
-
-  // Binary search bounds
-  const minAge = currentAge;
-  const maxAge = Math.min(preservationAge + 40, lifeExpectancy - 1);
-  
-  let lo = minAge;
-  let hi = maxAge;
-  
-  // Helper to check if retirement at age R is viable
-  const isViableAtAge = (R) => {
-    const yearsToRetirement = R - currentAge;
-    if (yearsToRetirement < 0) return false;
-    
-    // Project wealth to retirement age
-    const { outsideWealth, superWealth } = projectWealthSingle(
-      yearsToRetirement,
-      currentSavings,
-      currentSuper,
-      annualOutsideContrib,
-      annualSuperContrib,
-      superInsurance,
-      rReal
-    );
-    
-    // Evaluate DWZ stepped viability
-    const stepped = computeDwzStepped(R, preservationAge, lifeExpectancy, outsideWealth, superWealth, rReal, bequest);
-    return isSteppedPlanViable(stepped, targetSpend);
-  };
-  
-  // Check if viable at latest reasonable age
-  if (!isViableAtAge(hi)) {
-    return null; // Not achievable
-  }
-  
-  // Binary search for earliest viable age
-  for (let i = 0; i < 20; i++) {
-    if (lo >= hi) break;
-    
-    const mid = Math.floor((lo + hi) / 2);
-    if (isViableAtAge(mid)) {
-      hi = mid;
-    } else {
-      lo = mid + 1;
-    }
-  }
-  
-  return hi;
-}
-
-/**
- * Find earliest retirement age for couple
- */
-function findEarliestRetirementAgeCouple(params) {
-  const {
-    currentAge,
-    targetSpend,
-    bequest,
-    lifeExpectancy,
-    currentSavings,
-    currentSuper1,
-    currentSuper2,
-    annualOutsideContrib,
-    annualSuperContrib1,
-    annualSuperContrib2,
-    superInsurance1,
-    superInsurance2,
-    rReal,
-    preservationAge1,
-    preservationAge2
-  } = params;
-
-  const minAge = currentAge;
-  const maxAge = Math.min(Math.max(preservationAge1, preservationAge2) + 40, lifeExpectancy - 1);
-  
-  let lo = minAge;
-  let hi = maxAge;
-  
-  const isViableAtAge = (R) => {
-    const yearsToRetirement = R - currentAge;
-    if (yearsToRetirement < 0) return false;
-    
-    // Project wealth for both partners
-    const { outsideWealth, superWealth1, superWealth2 } = projectWealthCouple(
-      yearsToRetirement,
-      currentSavings,
-      currentSuper1,
-      currentSuper2,
-      annualOutsideContrib,
-      annualSuperContrib1,
-      annualSuperContrib2,
-      superInsurance1,
-      superInsurance2,
-      rReal
-    );
-    
-    // Use simplified couple DWZ evaluation (would need full couple DWZ engine)
-    // For MVP, combine super wealth and use single-person logic
-    const totalSuperWealth = superWealth1 + superWealth2;
-    const earliestPreservation = Math.min(preservationAge1, preservationAge2);
-    
-    const stepped = computeDwzStepped(R, earliestPreservation, lifeExpectancy, outsideWealth, totalSuperWealth, rReal, bequest);
-    return isSteppedPlanViable(stepped, targetSpend);
-  };
-  
-  if (!isViableAtAge(hi)) {
-    return null;
-  }
-  
-  for (let i = 0; i < 20; i++) {
-    if (lo >= hi) break;
-    
-    const mid = Math.floor((lo + hi) / 2);
-    if (isViableAtAge(mid)) {
-      hi = mid;
-    } else {
-      lo = mid + 1;
-    }
-  }
-  
-  return hi;
-}
-
-/**
- * Project wealth accumulation for single person
- */
-function projectWealthSingle(years, currentSavings, currentSuper, annualOutside, annualSuper, insurance, rReal) {
-  let outsideWealth = Money.money(currentSavings);
-  let superWealth = Money.money(currentSuper);
-  
-  const growthFactor = Money.add(1, rReal);
-  
-  for (let year = 0; year < years; year++) {
-    // Grow existing wealth
-    outsideWealth = Money.mul(outsideWealth, growthFactor);
-    superWealth = Money.mul(superWealth, growthFactor);
-    
-    // Add contributions
-    outsideWealth = Money.add(outsideWealth, annualOutside);
-    superWealth = Money.add(superWealth, annualSuper);
-    
-    // Deduct insurance premiums from super
-    superWealth = Money.sub(superWealth, insurance);
-    superWealth = Money.max(superWealth, Money.money(0)); // Can't go negative
-  }
   
   return {
-    outsideWealth: Money.toNumber(outsideWealth),
-    superWealth: Money.toNumber(superWealth)
-  };
-}
-
-/**
- * Project wealth accumulation for couple
- */
-function projectWealthCouple(years, currentSavings, currentSuper1, currentSuper2, annualOutside, annualSuper1, annualSuper2, insurance1, insurance2, rReal) {
-  let outsideWealth = Money.money(currentSavings);
-  let superWealth1 = Money.money(currentSuper1);
-  let superWealth2 = Money.money(currentSuper2);
-  
-  const growthFactor = Money.add(1, rReal);
-  
-  for (let year = 0; year < years; year++) {
-    // Grow existing wealth
-    outsideWealth = Money.mul(outsideWealth, growthFactor);
-    superWealth1 = Money.mul(superWealth1, growthFactor);
-    superWealth2 = Money.mul(superWealth2, growthFactor);
-    
-    // Add contributions
-    outsideWealth = Money.add(outsideWealth, annualOutside);
-    superWealth1 = Money.add(superWealth1, annualSuper1);
-    superWealth2 = Money.add(superWealth2, annualSuper2);
-    
-    // Deduct insurance premiums
-    superWealth1 = Money.sub(superWealth1, insurance1);
-    superWealth2 = Money.sub(superWealth2, insurance2);
-    superWealth1 = Money.max(superWealth1, Money.money(0));
-    superWealth2 = Money.max(superWealth2, Money.money(0));
-  }
-  
-  return {
-    outsideWealth: Money.toNumber(outsideWealth),
-    superWealth1: Money.toNumber(superWealth1),
-    superWealth2: Money.toNumber(superWealth2)
+    earliestAge: earliestResult.earliestAge,
+    sustainableSpending: earliestResult.sustainableSpending,
+    bands: earliestResult.bands
   };
 }
 
 /**
  * Optimize contribution split for single person
- * 
- * @param {Object} params - Optimization parameters  
- * @returns {Object} Optimal split recommendation
+ * @param {Object} params - Single person optimization parameters
+ * @returns {Object} Optimal split strategy
  */
-export function optimizeSplitSingle(params) {
-  let bestResult = { earliestAge: Infinity, alpha: 0 };
+export function optimiseSplitSingle(params) {
+  const {
+    currentAge,
+    retirementAge,
+    lifeExpectancy,
+    preservationAge = 60,
+    currentOutside = 0,
+    currentSuper = 0,
+    salary = 0,
+    insurance = 0,
+    annualSavingsBudget = 0,
+    targetSpend = 50000,
+    bequest = 0,
+    sgPct = 0.115,
+    concessionalCap = 30000,
+    assumptions = { nominalReturn: new Decimal(0.085), inflation: new Decimal(0.025) }
+  } = params;
   
-  // Coarse grid search (0 to 1 in steps of 0.05)
-  for (let alpha = 0; alpha <= 1; alpha += 0.05) {
-    const result = evaluateSplitSingle(alpha, params);
-    if (result.viable && result.earliestAge < bestResult.earliestAge) {
-      bestResult = { ...result, alpha };
+  const headroom = computeHeadroom({ salary, sgPct, concessionalCap });
+  const stepSize = 500;
+  
+  let bestStrategy = {
+    earliestAge: null,
+    sustainableSpending: new Decimal(0),
+    sac: 0,
+    outside: annualSavingsBudget,
+    capUsePct: 0
+  };
+  
+  // Limit grid search for performance
+  const maxSteps = Math.min(Math.floor(headroom / stepSize) + 1, 40); // Max 40 iterations
+  
+  // Grid search over salary sacrifice amounts
+  for (let i = 0; i <= maxSteps; i++) {
+    const sac = Math.min(i * stepSize, headroom);
+    const outside = Math.max(0, annualSavingsBudget - sac);
+    
+    // Project balances to retirement
+    const household = {
+      currentAge,
+      retirementAge,
+      currentOutside,
+      currentSuper1: currentSuper,
+      currentSuper2: 0,
+      insurance1: insurance,
+      insurance2: 0,
+      salary1: salary,
+      salary2: 0,
+      sgPct
+    };
+    
+    const projectedWealth = projectBalancesToR(household, sac, 0, outside, assumptions);
+    
+    // Evaluate earliest retirement age
+    const evaluation = evaluateEarliestAge({
+      currentAge,
+      lifeExpectancy,
+      preservationAge,
+      targetSpend,
+      bequest
+    }, projectedWealth, assumptions);
+    
+    // Update best strategy if this is better
+    if (evaluation.earliestAge !== null) {
+      const isBetter = bestStrategy.earliestAge === null ||
+                      evaluation.earliestAge < bestStrategy.earliestAge ||
+                      (evaluation.earliestAge === bestStrategy.earliestAge && 
+                       evaluation.sustainableSpending.gt(bestStrategy.sustainableSpending));
+      
+      if (isBetter) {
+        bestStrategy = {
+          earliestAge: evaluation.earliestAge,
+          sustainableSpending: evaluation.sustainableSpending,
+          sac,
+          outside,
+          capUsePct: headroom > 0 ? (sac / headroom) * 100 : 0
+        };
+      }
     }
   }
   
-  if (bestResult.earliestAge === Infinity) {
-    return null; // No viable solution found
+  // Generate rationale
+  const rationale = [];
+  const bridgeYears = preservationAge - (bestStrategy.earliestAge || retirementAge);
+  
+  if (bridgeYears > 10) {
+    rationale.push("Long bridge period favours outside investments");
+  } else if (bridgeYears < 5) {
+    rationale.push("Short bridge period favours super contributions");
   }
   
-  // Fine-tune around best result (±0.05 in steps of 0.01)
-  const centerAlpha = bestResult.alpha;
-  const minAlpha = Math.max(0, centerAlpha - 0.05);
-  const maxAlpha = Math.min(1, centerAlpha + 0.05);
-  
-  for (let alpha = minAlpha; alpha <= maxAlpha; alpha += 0.01) {
-    const result = evaluateSplitSingle(alpha, params);
-    if (result.viable && result.earliestAge < bestResult.earliestAge) {
-      bestResult = { ...result, alpha };
-    }
+  if (bestStrategy.capUsePct > 90) {
+    rationale.push("Concessional cap fully utilized");
+  } else if (bestStrategy.capUsePct < 10) {
+    rationale.push("Super contributions minimized for liquidity");
   }
   
-  return bestResult;
+  if (insurance > salary * 0.01) {
+    rationale.push("High insurance reduces super contribution effectiveness");
+  }
+  
+  return {
+    earliestAge: bestStrategy.earliestAge,
+    splits: {
+      person1: {
+        sac: Math.round(bestStrategy.sac),
+        capUsePct: Math.round(bestStrategy.capUsePct * 10) / 10
+      },
+      outside: Math.round(bestStrategy.outside)
+    },
+    rationale
+  };
 }
 
 /**
  * Optimize contribution split for couple
- * 
  * @param {Object} params - Couple optimization parameters
- * @returns {Object} Optimal split recommendation
+ * @returns {Object} Optimal split strategy
  */
-export function optimizeSplitCouple(params) {
-  let bestResult = { earliestAge: Infinity, alpha1: 0, alpha2: 0 };
+export function optimiseSplitCouple(params) {
+  const {
+    currentAge,
+    retirementAge,
+    lifeExpectancy,
+    preservationAge1 = 60,
+    preservationAge2 = 60,
+    currentOutside = 0,
+    currentSuper1 = 0,
+    currentSuper2 = 0,
+    salary1 = 0,
+    salary2 = 0,
+    insurance1 = 0,
+    insurance2 = 0,
+    annualSavingsBudget = 0,
+    targetSpend = 50000,
+    bequest = 0,
+    sgPct = 0.115,
+    concessionalCap = 30000,
+    assumptions = { nominalReturn: new Decimal(0.085), inflation: new Decimal(0.025) }
+  } = params;
   
-  // Coarse 2D grid search
-  const coarseSteps = [0, 0.25, 0.5, 0.75, 1.0];
+  const headroom1 = computeHeadroom({ salary: salary1, sgPct, concessionalCap });
+  const headroom2 = computeHeadroom({ salary: salary2, sgPct, concessionalCap });
+  const stepSize = 500;
   
-  for (const alpha1 of coarseSteps) {
-    for (const alpha2 of coarseSteps) {
-      const result = evaluateSplitCouple(alpha1, alpha2, params);
-      if (result.viable && result.earliestAge < bestResult.earliestAge) {
-        bestResult = { ...result, alpha1, alpha2 };
+  // Use younger partner's preservation age for optimization
+  const effectivePreservationAge = Math.min(preservationAge1, preservationAge2);
+  
+  let bestStrategy = {
+    earliestAge: null,
+    sustainableSpending: new Decimal(0),
+    sac1: 0,
+    sac2: 0,
+    outside: annualSavingsBudget,
+    capUsePct1: 0,
+    capUsePct2: 0
+  };
+  
+  // Coarse grid search for performance - limit to prevent timeout
+  const maxSteps1 = Math.min(Math.floor(headroom1 / stepSize) + 1, 12);
+  const maxSteps2 = Math.min(Math.floor(headroom2 / stepSize) + 1, 12);
+  
+  for (let i1 = 0; i1 <= maxSteps1; i1++) {
+    const sac1 = Math.min(i1 * stepSize, headroom1);
+    
+    for (let i2 = 0; i2 <= maxSteps2; i2++) {
+      const sac2 = Math.min(i2 * stepSize, headroom2);
+      const totalSac = sac1 + sac2;
+      
+      if (totalSac > annualSavingsBudget) continue; // Budget constraint
+      
+      const outside = Math.max(0, annualSavingsBudget - totalSac);
+      
+      // Project balances to retirement
+      const household = {
+        currentAge,
+        retirementAge,
+        currentOutside,
+        currentSuper1,
+        currentSuper2,
+        insurance1,
+        insurance2,
+        salary1,
+        salary2,
+        sgPct
+      };
+      
+      const projectedWealth = projectBalancesToR(household, sac1, sac2, outside, assumptions);
+      
+      // Evaluate earliest retirement age
+      const evaluation = evaluateEarliestAge({
+        currentAge,
+        lifeExpectancy,
+        preservationAge: effectivePreservationAge,
+        targetSpend,
+        bequest
+      }, projectedWealth, assumptions);
+      
+      // Update best strategy if this is better
+      if (evaluation.earliestAge !== null) {
+        const isBetter = bestStrategy.earliestAge === null ||
+                        evaluation.earliestAge < bestStrategy.earliestAge ||
+                        (evaluation.earliestAge === bestStrategy.earliestAge && 
+                         evaluation.sustainableSpending.gt(bestStrategy.sustainableSpending)) ||
+                        (evaluation.earliestAge === bestStrategy.earliestAge && 
+                         evaluation.sustainableSpending.eq(bestStrategy.sustainableSpending) && 
+                         outside > bestStrategy.outside);
+        
+        if (isBetter) {
+          bestStrategy = {
+            earliestAge: evaluation.earliestAge,
+            sustainableSpending: evaluation.sustainableSpending,
+            sac1,
+            sac2,
+            outside,
+            capUsePct1: headroom1 > 0 ? (sac1 / headroom1) * 100 : 0,
+            capUsePct2: headroom2 > 0 ? (sac2 / headroom2) * 100 : 0
+          };
+        }
       }
     }
   }
   
-  if (bestResult.earliestAge === Infinity) {
-    return null; // No viable solution found
+  // Generate rationale
+  const rationale = [];
+  const bridgeYears = effectivePreservationAge - (bestStrategy.earliestAge || retirementAge);
+  
+  if (bridgeYears > 10) {
+    rationale.push("Long bridge period favours outside investments");
+  } else if (bridgeYears < 5) {
+    rationale.push("Short bridge period favours super contributions");
   }
   
-  // Fine-tune around best result (±0.25 in steps of 0.05)
-  const centerAlpha1 = bestResult.alpha1;
-  const centerAlpha2 = bestResult.alpha2;
-  
-  const minAlpha1 = Math.max(0, centerAlpha1 - 0.25);
-  const maxAlpha1 = Math.min(1, centerAlpha1 + 0.25);
-  const minAlpha2 = Math.max(0, centerAlpha2 - 0.25);
-  const maxAlpha2 = Math.min(1, centerAlpha2 + 0.25);
-  
-  for (let alpha1 = minAlpha1; alpha1 <= maxAlpha1; alpha1 += 0.05) {
-    for (let alpha2 = minAlpha2; alpha2 <= maxAlpha2; alpha2 += 0.05) {
-      const result = evaluateSplitCouple(alpha1, alpha2, params);
-      if (result.viable && result.earliestAge < bestResult.earliestAge) {
-        bestResult = { ...result, alpha1, alpha2 };
-      }
-    }
+  if (bestStrategy.capUsePct1 > 90 && bestStrategy.capUsePct2 > 90) {
+    rationale.push("Both partners' concessional caps fully utilized");
+  } else if (bestStrategy.capUsePct1 > 90) {
+    rationale.push("Partner 1 concessional cap fully utilized");
+  } else if (bestStrategy.capUsePct2 > 90) {
+    rationale.push("Partner 2 concessional cap fully utilized");
   }
   
-  return bestResult;
+  if (bestStrategy.sac1 > bestStrategy.sac2 + 1000) {
+    rationale.push("Higher contributions favoured for partner 1");
+  } else if (bestStrategy.sac2 > bestStrategy.sac1 + 1000) {
+    rationale.push("Higher contributions favoured for partner 2");
+  }
+  
+  const totalInsurance = insurance1 + insurance2;
+  if (totalInsurance > (salary1 + salary2) * 0.01) {
+    rationale.push("Insurance premiums reduce super contribution effectiveness");
+  }
+  
+  return {
+    earliestAge: bestStrategy.earliestAge,
+    splits: {
+      person1: {
+        sac: Math.round(bestStrategy.sac1),
+        capUsePct: Math.round(bestStrategy.capUsePct1 * 10) / 10
+      },
+      person2: {
+        sac: Math.round(bestStrategy.sac2),
+        capUsePct: Math.round(bestStrategy.capUsePct2 * 10) / 10
+      },
+      outside: Math.round(bestStrategy.outside)
+    },
+    rationale
+  };
 }
