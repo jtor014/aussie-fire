@@ -937,9 +937,17 @@ const AustralianFireCalculator = () => {
       netReturn: kpis.netReturn,
       realReturn: kpis.realReturn,
       // fireNumber removed for DWZ-only mode
-      bridgePeriodFeasible: kpis.bridgeAssessment.feasible,
-      bridgePeriodShortfall: kpis.bridgeAssessment.shortfall,
-      bridgePeriodDetails: kpis.bridgeAssessment,
+      // T-021: Use unified bridge assessment from decision solver
+      bridgePeriodFeasible: decision.kpis.bridgeAssessment?.covered || false,
+      bridgePeriodShortfall: decision.kpis.bridgeAssessment ? Math.max(0, decision.kpis.bridgeAssessment.neededPV - decision.kpis.bridgeAssessment.havePV) : 0,
+      bridgePeriodDetails: decision.kpis.bridgeAssessment ? {
+        needsBridge: decision.kpis.bridgeAssessment.years > 0,
+        bridgeYears: decision.kpis.bridgeAssessment.years,
+        fundsNeeded: decision.kpis.bridgeAssessment.neededPV,
+        fundsAvailable: decision.kpis.bridgeAssessment.havePV,
+        feasible: decision.kpis.bridgeAssessment.covered,
+        shortfall: Math.max(0, decision.kpis.bridgeAssessment.neededPV - decision.kpis.bridgeAssessment.havePV)
+      } : { needsBridge: false, bridgeYears: 0, fundsNeeded: 0, fundsAvailable: 0, feasible: true, shortfall: 0 },
       basicRetirementFeasible,
       // Advanced Super calculations
       employerSuperContribution: kpis.superContribs.employer,

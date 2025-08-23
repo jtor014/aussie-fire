@@ -7,7 +7,8 @@
  * Spending varies by age band with multipliers applied to base amount S.
  */
 import Decimal from 'decimal.js-light';
-import { bandScheduleFor, pvSpendAtR, pvBridgeAtR, pvPostAtR } from './age_bands.js';
+import { bandScheduleFor, pvSpendAtR, pvBridgeAtR, pvPostAtR, buildSpendingSchedule } from './age_bands.js';
+import { computeBridgeRequirement } from './bridge.js';
 
 // --- helpers & analyzer: constraint explainer functions ---
 
@@ -166,10 +167,28 @@ export function solveSustainableSpending({
     iterations++;
   }
   
+  // Compute bridge requirement using unified logic
+  const schedule = buildSpendingSchedule({
+    R: retirementAge,
+    L: lifeExpectancy, 
+    S: low.toNumber(),
+    bands: bands
+  });
+  
+  const bridgeAssessment = computeBridgeRequirement({
+    R: retirementAge,
+    presAge: preservationAge,
+    schedule: schedule,
+    outsideAtR: outsideWealth.toNumber(),
+    realReturn: realReturn.toNumber()
+  });
+
   return {
     sustainableAnnual: low,
     bands: bands,
-    iterations: iterations
+    iterations: iterations,
+    bridgeAssessment: bridgeAssessment,
+    schedule: schedule
   };
 }
 
