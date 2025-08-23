@@ -327,9 +327,7 @@ const AustralianFireCalculator = () => {
   // Planning mode
   const [planningAs, setPlanningAs] = useState('single'); // 'single' | 'couple'
   
-  // DWZ Planning mode: earliest-first vs pin age
-  const [dwzPlanningMode, setDwzPlanningMode] = useState('earliest'); // 'earliest' | 'pinned'
-  const [pinnedRetirementAge, setPinnedRetirementAge] = useState(retirementAge);
+  // T-015: DWZ-only mode - removed dwzPlanningMode and pinnedRetirementAge
 
   // DWZ is always enabled (T-010 - removed toggle)
 
@@ -515,7 +513,8 @@ const AustralianFireCalculator = () => {
       setAnnualIncome(parseFloat(urlParams.get('income')) || 100000);
       setAnnualExpenses(parseFloat(urlParams.get('expenses')) || 65000);
       setCurrentSuper(parseFloat(urlParams.get('super')) || 100000);
-      // T-010: Migration shim - check both dzm and legacy dwzEnabled params
+      // T-015: DWZ-only mode shim - ignore legacy params dwzEnabled, pinnedAge, retirementAge
+      // Legacy params: dwzEnabled (always true now), pinnedAge (removed), retirementAge (use 'retire' only for compat)
       setDieWithZeroMode(urlParams.get('dzm') === '1' || urlParams.get('dwzEnabled') === '1');
       setLifeExpectancy(parseInt(urlParams.get('life')) || 90);
       setExpectedReturn(parseFloat(urlParams.get('return')) || 8.5);
@@ -757,18 +756,9 @@ const AustralianFireCalculator = () => {
       inflationRate
     };
     
-    // If pinned mode and not viable, create alternate decision for earliest age
-    if (dwzPlanningMode === 'pinned' && !decision.canRetireAtTarget && decision.earliestFireAge) {
-      const earliestDecision = {
-        ...decision,
-        targetAge: decision.earliestFireAge,
-        canRetireAtTarget: true // Use earliest viable age
-      };
-      return depletionFromDecision(state, earliestDecision, auRules);
-    }
-    
+    // T-015: Always use decision as-is (no pinned mode fallback needed)
     return depletionFromDecision(state, decision, auRules);
-  }, [decision, dwzPlanningMode, currentAge, lifeExpectancy, bequest, annualIncome, annualExpenses, 
+  }, [decision, currentAge, lifeExpectancy, bequest, annualIncome, annualExpenses, 
       currentSavings, currentSuper, expectedReturn, inflationRate]);
   
   // Strategy optimization
@@ -905,8 +895,9 @@ const AustralianFireCalculator = () => {
       ? dwzOutputs.earliest
       : null;
 
+  // T-015: Use earliestFireAge from KPIs for years to freedom calculation
   const fireAgeForUi = dwzEarliestAge ?? retirementAge;
-  const yearsToFreedom = Math.max(0, fireAgeForUi - currentAge);
+  const yearsToFreedom = kpis.yearsToFreedom;
 
   // Chart data generation using DWZ depletion path
   const chartDataSingle = useMemo(() => {
@@ -1094,7 +1085,6 @@ const AustralianFireCalculator = () => {
       {/* Global DWZ Results Banner */}
       <GlobalBanner 
         decision={decision} 
-        dwzPlanningMode={dwzPlanningMode} 
         lifeExpectancy={lifeExpectancy}
         bequest={bequest}
       />
@@ -1129,46 +1119,6 @@ const AustralianFireCalculator = () => {
           </div>
         </div>
 
-        {/* DWZ Planning Mode */}
-        <div style={{ 
-          marginBottom: 16, 
-          padding: '12px', 
-          backgroundColor: '#f8fafc', 
-          borderRadius: '8px',
-          border: '1px solid #e5e7eb' 
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
-            🎯 DWZ Planning Mode
-          </div>
-          <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input 
-                type="radio" 
-                checked={dwzPlanningMode === 'earliest'} 
-                onChange={() => setDwzPlanningMode('earliest')}
-              />
-              <span>
-                <strong>Earliest</strong> (recommended)
-                <div style={{ fontSize: 11, color: '#6b7280' }}>
-                  Find when you can retire at your desired spending level
-                </div>
-              </span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input 
-                type="radio" 
-                checked={dwzPlanningMode === 'pinned'} 
-                onChange={() => setDwzPlanningMode('pinned')}
-              />
-              <span>
-                <strong>Pin age</strong>
-                <div style={{ fontSize: 11, color: '#6b7280' }}>
-                  Check if you can retire at a specific age
-                </div>
-              </span>
-            </label>
-          </div>
-        </div>
 
         {/* Unified person cards */}
         <div style={{ display:'grid', gridTemplateColumns: planningAs==='couple' ? '1fr 1fr' : '1fr', gap:16 }}>
@@ -1176,9 +1126,7 @@ const AustralianFireCalculator = () => {
           <PersonSituationCard
             label="You"
             age={currentAge}                 onAge={setCurrentAge}
-            retireAge={dwzPlanningMode === 'pinned' ? (pinnedRetirementAge || retirementAge) : retirementAge}        
-            onRetireAge={dwzPlanningMode === 'pinned' ? setPinnedRetirementAge : setRetirementAge}
-            showRetireAge={dwzPlanningMode === 'pinned'}
+            showRetireAge={false}
             income={annualIncome}            onIncome={setAnnualIncome}
             savings={currentSavings}         onSavings={setCurrentSavings}
             superBalance={currentSuper}      onSuperBalance={setCurrentSuper}
@@ -1192,8 +1140,7 @@ const AustralianFireCalculator = () => {
             <PersonSituationCard
               label="Partner"
               age={partnerB.currentAge}            onAge={v=>setPartnerB(p=>({ ...p, currentAge:v }))}
-              retireAge={partnerB.retireAge}       onRetireAge={v=>setPartnerB(p=>({ ...p, retireAge:v }))}
-              showRetireAge={dwzPlanningMode === 'pinned'}
+              showRetireAge={false}
               income={partnerB.income}             onIncome={v=>setPartnerB(p=>({ ...p, income:v }))}
               savings={partnerB.liquidStart}       onSavings={v=>setPartnerB(p=>({ ...p, liquidStart:v }))}
               superBalance={partnerB.superStart}   onSuperBalance={v=>setPartnerB(p=>({ ...p, superStart:v }))}
@@ -2042,27 +1989,24 @@ const AustralianFireCalculator = () => {
               color: decision.earliestFireAge ? '#059669' : '#dc2626',
               border: `1px solid ${decision.earliestFireAge ? '#059669' : '#dc2626'}`,
             }}>
-              {dwzPlanningMode === 'earliest' ? (
-                decision.earliestFireAge ? 
-                  `Viable — earliest age ${decision.targetAge}` :
-                  'Not viable'
-              ) : (
-                `Pinned ${decision.targetAge} ${decision.canRetireAtTarget ? 'Viable' : 'Not viable'} — earliest ${decision.earliestFireAge || 'N/A'}`
-              )}
+              {decision.earliestFireAge ? 
+                `Viable - earliest age ${decision.targetAge}` :
+                'Not viable'
+              }
             </div>
 
-            {/* Sustainable spending summary (T-011) */}
-            {decision.earliestFireAge && kpis.S_pre && kpis.S_post && (
+            {/* Sustainable spending summary (T-011 - fixed to use decision KPIs) */}
+            {decision.earliestFireAge && decision.kpis.S_pre && decision.kpis.S_post && (
               <div style={{
                 marginTop: 12,
                 fontSize: '13px',
                 color: '#4b5563',
                 lineHeight: '1.5'
               }}>
-                {Math.abs(kpis.S_pre - kpis.S_post) > 1000 ? (
-                  <div>Sustainable spending (DWZ): <strong>${Math.round(kpis.S_pre).toLocaleString()} before super</strong> / <strong>${Math.round(kpis.S_post).toLocaleString()} after super</strong></div>
+                {Math.abs(decision.kpis.S_pre - decision.kpis.S_post) > 1000 ? (
+                  <div>Sustainable spending (DWZ): <strong>${Math.round(decision.kpis.S_pre).toLocaleString()} before super</strong> / <strong>${Math.round(decision.kpis.S_post).toLocaleString()} after super</strong></div>
                 ) : (
-                  <div>Sustainable spending (DWZ): <strong>${Math.round(kpis.S_pre).toLocaleString()}/yr</strong></div>
+                  <div>Sustainable spending (DWZ): <strong>${Math.round(decision.kpis.S_pre).toLocaleString()}/yr</strong></div>
                 )}
               </div>
             )}
@@ -2120,7 +2064,7 @@ const AustralianFireCalculator = () => {
                         <div>
                           <dt style={{fontSize: 13, color: '#4b5563', display: 'inline'}}>Joint outside:</dt>
                           <dd style={{fontSize: 14, fontWeight: 600, display: 'inline', marginLeft: 8}}>
-                            ${((strategyDisplay.splits.person1.outside || 0) + (strategyDisplay.splits.person2.outside || 0)).toLocaleString()}
+                            ${(strategyDisplay.splits.outside || 0).toLocaleString()}
                           </dd>
                         </div>
                       </dl>
@@ -2204,11 +2148,12 @@ const AustralianFireCalculator = () => {
             const canRetire = s.canRetire;
             const earliest = s.earliestRetirement;
             const bridge = s.bridge;
-            return canRetire ? (
+            // Always show earliest retirement age results
+            return (
               <div>
                 <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#059669' }}>
-                    ✅ You can retire (earliest) at {earliest}!
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: canRetire ? '#059669' : '#dc2626' }}>
+                    {canRetire ? '✅ You can retire (earliest)' : '⚠️ Earliest you could retire'} at {earliest}!
                   </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '32px', padding: '24px', background: '#f9fafb', borderRadius: 12 }}>
@@ -2233,17 +2178,6 @@ const AustralianFireCalculator = () => {
                     <div style={{ fontSize: 13, color: '#6b7280' }}>
                       Need {formatCurrency(bridge.fundsNeeded)} outside super; have {formatCurrency(bridge.fundsAvailable)}
                     </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#dc2626', marginBottom: 12 }}>
-                  ❌ Cannot retire at earliest target {earliest}
-                </div>
-                {bridge.needsBridge && !bridge.feasible && (
-                  <div style={{ padding: 12, background: '#fef2f2', borderRadius: 8, fontSize: 14, color: '#7f1d1d' }}>
-                    Main issue: Insufficient outside-super to bridge to preservation age
                   </div>
                 )}
               </div>
@@ -2409,50 +2343,14 @@ const AustralianFireCalculator = () => {
             />
             <Tooltip content={<CustomTooltip />} />
 
-            {/* Chart markers based on planning mode (T-011) */}
-            {dwzPlanningMode === 'earliest' ? (
-              // Earliest mode: show marker for earliest FIRE age if available
-              decision.earliestFireAge != null && (
-                <ReferenceLine
-                  x={decision.earliestFireAge}
-                  stroke="#059669"
-                  strokeDasharray="4 3"
-                  label={{ value: `Earliest FIRE: ${decision.earliestFireAge}`, position: 'top', fill: '#059669', fontSize: 12 }}
-                />
-              )
-            ) : (
-              // Pinned mode: show both viable target and earliest (if not viable)
-              <React.Fragment>
-                {decision.canRetireAtTarget ? (
-                  // Viable pinned age: show solid line
-                  <ReferenceLine 
-                    x={decision.targetAge || retirementAge} 
-                    stroke="#6b7280" 
-                    strokeDasharray="5 5"
-                    label={{ value: `Target: ${decision.targetAge || retirementAge}`, position: "top" }}
-                  />
-                ) : (
-                  <React.Fragment>
-                    {/* Non-viable pinned age: thin dotted line */}
-                    <ReferenceLine 
-                      x={pinnedRetirementAge} 
-                      stroke="#dc2626" 
-                      strokeDasharray="2 2"
-                      strokeWidth={1}
-                      label={{ value: `Pinned (not viable)`, position: "top", fill: '#dc2626', fontSize: 10 }}
-                    />
-                    {/* Show earliest viable age */}
-                    {decision.earliestFireAge != null && (
-                      <ReferenceLine
-                        x={decision.earliestFireAge}
-                        stroke="#059669"
-                        strokeDasharray="4 3"
-                        label={{ value: `Earliest viable: ${decision.earliestFireAge}`, position: 'topLeft', fill: '#059669', fontSize: 12 }}
-                      />
-                    )}
-                  </React.Fragment>
-                )}
-              </React.Fragment>
+            {/* Chart markers - T-015: DWZ-only mode shows Earliest FIRE only */}
+            {decision.earliestFireAge != null && (
+              <ReferenceLine
+                x={decision.earliestFireAge}
+                stroke="#059669"
+                strokeDasharray="4 3"
+                label={{ value: `Earliest FIRE: ${decision.earliestFireAge}`, position: 'top', fill: '#059669', fontSize: 12 }}
+              />
             )}
             {depletionData?.markers?.map((marker, index) => (
               <ReferenceLine

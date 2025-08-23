@@ -1,22 +1,21 @@
 import React from 'react';
 
 /**
- * Global banner that displays retirement decision status (T-011 updated copy).
- * Shows real-time results directly under page title for DWZ mode.
+ * Global banner that displays retirement decision status (T-015 DWZ-only).
+ * Shows earliest retirement age and sustainable spending.
  * 
  * @param {Object} props
  * @param {Object} props.decision - Decision object from decisionFromState
- * @param {string} props.dwzPlanningMode - 'earliest' | 'pinned'
  * @param {number} props.lifeExpectancy - Life expectancy for display
  * @param {number} props.bequest - Bequest amount for display
  * @returns {JSX.Element} Global banner component
  */
-export function GlobalBanner({ decision, dwzPlanningMode, lifeExpectancy, bequest = 0 }) {
+export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
   if (!decision) {
     return null;
   }
 
-  const { canRetireAtTarget, targetAge, earliestFireAge, kpis } = decision;
+  const { canRetireAtTarget, targetAge, earliestFireAge, kpis: decisionKpis } = decision;
   
   // Helper function to format money values with thousands separators (T-011)
   const formatMoney = (amount) => {
@@ -33,9 +32,9 @@ export function GlobalBanner({ decision, dwzPlanningMode, lifeExpectancy, beques
     fontWeight: '600',
     textAlign: 'center',
     border: '2px solid',
-    backgroundColor: canRetireAtTarget ? '#dcfce7' : '#fef3c7',
-    borderColor: canRetireAtTarget ? '#16a34a' : '#f59e0b',
-    color: canRetireAtTarget ? '#166534' : '#92400e'
+    backgroundColor: earliestFireAge ? '#dcfce7' : '#fef3c7',
+    borderColor: earliestFireAge ? '#16a34a' : '#f59e0b',
+    color: earliestFireAge ? '#166534' : '#92400e'
   };
 
   const detailStyle = {
@@ -45,63 +44,29 @@ export function GlobalBanner({ decision, dwzPlanningMode, lifeExpectancy, beques
     opacity: 0.9
   };
 
-  // Generate main message based on planning mode and viability (T-011R fixed)
+  // T-015: DWZ-only mode - always show earliest retirement age
   let mainMessage;
   let secondaryMessage = null;
 
-  if (dwzPlanningMode === 'earliest') {
-    if (canRetireAtTarget) {
-      const desiredSpend = formatMoney(kpis.planSpend || kpis.S_pre || kpis.S_post || 0);
-      mainMessage = (
-        <>
-          🎯 Earliest you can retire: <strong>{targetAge}</strong> at <strong>${desiredSpend}/yr</strong> (L={lifeExpectancy}, Bequest=${formatMoney(bequest)})
-        </>
-      );
-    } else {
-      mainMessage = <>❌ Cannot achieve retirement with current settings</>;
-    }
+  if (earliestFireAge) {
+    const desiredSpend = formatMoney(decisionKpis.sustainableAnnual || decisionKpis.planSpend || 0);
+    mainMessage = (
+      <>
+        Earliest you can retire: <strong>{earliestFireAge}</strong> at <strong>${desiredSpend}/yr</strong> (L={lifeExpectancy}, Bequest=${formatMoney(bequest)})
+      </>
+    );
   } else {
-    // Pinned mode (T-011R: improved copy)
-    if (canRetireAtTarget) {
-      if (earliestFireAge && earliestFireAge < targetAge) {
-        mainMessage = (
-          <>
-            ✅ On track to retire at <strong>{targetAge}</strong> (Earliest possible today: {earliestFireAge})
-          </>
-        );
-      } else {
-        mainMessage = <>✅ On track to retire at <strong>{targetAge}</strong></>;
-      }
-    } else {
-      if (earliestFireAge) {
-        mainMessage = (
-          <>
-            ❌ Cannot retire at age <strong>{targetAge}</strong> (pinned). Earliest possible today: {earliestFireAge}.
-          </>
-        );
-      } else {
-        mainMessage = <>❌ Cannot retire at age <strong>{targetAge}</strong> (pinned)</>;
-      }
-    }
+    mainMessage = <>Cannot achieve retirement with current settings</>;
   }
 
-  // Secondary line: sustainable spending details (T-011R fixed)
-  if (kpis.S_pre && kpis.S_post) {
-    const preSpend = formatMoney(kpis.S_pre);
-    const postSpend = formatMoney(kpis.S_post);
-    if (Math.abs(kpis.S_pre - kpis.S_post) > 1000) {
-      secondaryMessage = (
-        <>
-          Sustainable (DWZ): <strong>${preSpend}/yr before super</strong> • <strong>${postSpend}/yr after super</strong>
-        </>
-      );
-    } else {
-      secondaryMessage = (
-        <>
-          Sustainable (DWZ): <strong>${preSpend}/yr</strong>
-        </>
-      );
-    }
+  // T-015: Secondary line with single sustainable spending amount
+  if (decisionKpis.sustainableAnnual) {
+    const sustainableSpend = formatMoney(decisionKpis.sustainableAnnual);
+    secondaryMessage = (
+      <>
+        Sustainable (DWZ): <strong>${sustainableSpend}/yr</strong>
+      </>
+    );
   }
 
   return (

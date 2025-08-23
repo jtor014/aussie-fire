@@ -19,9 +19,7 @@ export function decisionFromState(state, rules) {
     retirementAge,
     annualExpenses,
     lifeExpectancy,
-    bequest = 0,
-    dwzPlanningMode = 'earliest',
-    pinnedRetirementAge
+    bequest = 0
   } = state;
 
   // Calculate return rates
@@ -86,10 +84,8 @@ export function decisionFromState(state, rules) {
     minSpending: new Decimal(annualExpenses)
   });
 
-  // Determine target age based on planning mode
-  const targetAge = dwzPlanningMode === 'earliest' 
-    ? earliestResult.earliestAge || retirementAge
-    : (pinnedRetirementAge || retirementAge);
+  // T-015: Always use earliest age (no pinned mode)
+  const targetAge = earliestResult.earliestAge || retirementAge;
 
   // Get wealth at target age
   const { outsideWealth, superWealth } = getWealthAtAge(targetAge);
@@ -155,7 +151,6 @@ export function decisionFromState(state, rules) {
     targetAge,
     earliestFireAge: earliestResult.earliestAge,
     shortfallPhase,
-    dwzPlanningMode,
     kpis: {
       sustainableAnnual: solution.sustainableAnnual.toNumber(),
       bands: bands.map(band => ({

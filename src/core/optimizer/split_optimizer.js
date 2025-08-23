@@ -106,15 +106,15 @@ export function projectBalancesToR(household, sac1, sac2, outside, assumptions) 
 }
 
 /**
- * Evaluate earliest retirement age for given wealth projection
- * @param {Object} params - Household and financial parameters
- * @param {Object} projectedWealth - Wealth balances at retirement
+ * Evaluate sustainable spending at specific retirement age
+ * @param {number} retirementAge - The retirement age to test
+ * @param {Object} params - Household and financial parameters  
+ * @param {Object} projectedWealth - Wealth balances at retirement age
  * @param {Object} assumptions - Return and other assumptions
- * @returns {Object} Earliest retirement evaluation result
+ * @returns {Object} Sustainable spending evaluation result
  */
-export function evaluateEarliestAge(params, projectedWealth, assumptions) {
+export function evaluateSustainableSpending(retirementAge, params, projectedWealth, assumptions) {
   const { 
-    currentAge, 
     lifeExpectancy, 
     preservationAge, 
     targetSpend = 50000,
@@ -127,27 +127,60 @@ export function evaluateEarliestAge(params, projectedWealth, assumptions) {
   // For couples, combine super wealth and use younger person's preservation age
   const totalSuperWealth = projectedWealth.superWealth1.add(projectedWealth.superWealth2 || 0);
   
-  // Find earliest retirement age
-  const earliestResult = findEarliestRetirement({
-    currentAge,
-    maxRetirementAge: Math.min(preservationAge, lifeExpectancy - 5),
-    currentOutside: projectedWealth.outsideWealth,
-    currentSuper: totalSuperWealth,
-    annualSavings: new Decimal(0), // Already projected
-    annualSuperContrib: new Decimal(0), // Already projected
-    nominalReturn,
-    inflation,
+  // Solve sustainable spending at this retirement age
+  const solution = solveSustainableSpending({
+    retirementAge,
     lifeExpectancy,
+    outsideWealth: projectedWealth.outsideWealth,
+    superWealth: totalSuperWealth,
     preservationAge,
-    bequest: new Decimal(bequest),
-    minSpending: new Decimal(targetSpend)
+    realReturn,
+    bequest: new Decimal(bequest)
   });
   
   return {
-    earliestAge: earliestResult.earliestAge,
-    sustainableSpending: earliestResult.sustainableSpending,
-    bands: earliestResult.bands
+    sustainableSpending: solution.sustainableAnnual,
+    bands: solution.bands,
+    viable: solution.sustainableAnnual.gte(targetSpend)
   };
+}
+
+/**
+ * Find earliest viable retirement age through binary search
+ * @param {Object} params - Search parameters
+ * @param {Object} assumptions - Return assumptions
+ * @returns {number|null} Earliest viable retirement age or null
+ */
+export function findEarliestViableAge(params, assumptions) {
+  const { currentAge, lifeExpectancy, preservationAge, targetSpend } = params;
+  
+  const minAge = currentAge;
+  const maxAge = Math.min(preservationAge, lifeExpectancy - 5);
+  
+  // Binary search for earliest viable age
+  let low = minAge;
+  let high = maxAge;
+  let bestAge = null;
+  
+  for (let iterations = 0; iterations < 20 && low <= high; iterations++) {
+    const testAge = Math.floor((low + high) / 2);
+    
+    // Project wealth to this test age
+    const testHousehold = { ...params, retirementAge: testAge };
+    const projectedWealth = projectBalancesToR(testHousehold, params.sac1 || 0, params.sac2 || 0, params.outside || 0, assumptions);
+    
+    // Test if viable at this age
+    const evaluation = evaluateSustainableSpending(testAge, params, projectedWealth, assumptions);
+    
+    if (evaluation.viable) {
+      bestAge = testAge;
+      high = testAge - 1; // Look for earlier age
+    } else {
+      low = testAge + 1; // Need later age
+    }
+  }
+  
+  return bestAge;
 }
 
 /**
@@ -208,26 +241,27 @@ export function optimiseSplitSingle(params) {
     
     const projectedWealth = projectBalancesToR(household, sac, 0, outside, assumptions);
     
-    // Evaluate earliest retirement age
-    const evaluation = evaluateEarliestAge({
+    // Find earliest viable retirement age for this split
+    const earliestAge = findEarliestViableAge({
       currentAge,
       lifeExpectancy,
       preservationAge,
       targetSpend,
-      bequest
-    }, projectedWealth, assumptions);
+      bequest,
+      sac1: sac,
+      sac2: 0,
+      outside
+    }, assumptions);
     
     // Update best strategy if this is better
-    if (evaluation.earliestAge !== null) {
+    if (earliestAge !== null) {
       const isBetter = bestStrategy.earliestAge === null ||
-                      evaluation.earliestAge < bestStrategy.earliestAge ||
-                      (evaluation.earliestAge === bestStrategy.earliestAge && 
-                       evaluation.sustainableSpending.gt(bestStrategy.sustainableSpending));
+                      earliestAge < bestStrategy.earliestAge;
       
       if (isBetter) {
         bestStrategy = {
-          earliestAge: evaluation.earliestAge,
-          sustainableSpending: evaluation.sustainableSpending,
+          earliestAge: earliestAge,
+          sustainableSpending: new Decimal(0), // Will be computed later if needed
           sac,
           outside,
           capUsePct: headroom > 0 ? (sac / headroom) * 100 : 0
@@ -344,29 +378,28 @@ export function optimiseSplitCouple(params) {
       
       const projectedWealth = projectBalancesToR(household, sac1, sac2, outside, assumptions);
       
-      // Evaluate earliest retirement age
-      const evaluation = evaluateEarliestAge({
+      // Find earliest viable retirement age for this split
+      const earliestAge = findEarliestViableAge({
         currentAge,
         lifeExpectancy,
         preservationAge: effectivePreservationAge,
         targetSpend,
-        bequest
-      }, projectedWealth, assumptions);
+        bequest,
+        sac1,
+        sac2,
+        outside
+      }, assumptions);
       
       // Update best strategy if this is better
-      if (evaluation.earliestAge !== null) {
+      if (earliestAge !== null) {
         const isBetter = bestStrategy.earliestAge === null ||
-                        evaluation.earliestAge < bestStrategy.earliestAge ||
-                        (evaluation.earliestAge === bestStrategy.earliestAge && 
-                         evaluation.sustainableSpending.gt(bestStrategy.sustainableSpending)) ||
-                        (evaluation.earliestAge === bestStrategy.earliestAge && 
-                         evaluation.sustainableSpending.eq(bestStrategy.sustainableSpending) && 
-                         outside > bestStrategy.outside);
+                        earliestAge < bestStrategy.earliestAge ||
+                        (earliestAge === bestStrategy.earliestAge && outside > bestStrategy.outside);
         
         if (isBetter) {
           bestStrategy = {
-            earliestAge: evaluation.earliestAge,
-            sustainableSpending: evaluation.sustainableSpending,
+            earliestAge: earliestAge,
+            sustainableSpending: new Decimal(0), // Will be computed later if needed
             sac1,
             sac2,
             outside,
