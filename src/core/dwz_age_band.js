@@ -345,3 +345,147 @@ export function checkConstraintViolations({
     overall: bridgeConstraint.gte(0) && postConstraint.gte(0)
   };
 }
+
+/**
+ * Find earliest truly viable retirement age that satisfies BOTH horizon and bridge constraints
+ * @param {Object} params - Parameters object
+ * @param {number} params.currentAge - Current age
+ * @param {number} params.lifeExpectancy - Life expectancy
+ * @param {number} params.preservationAge - Super preservation age
+ * @param {Decimal} params.outsideAtRetirement - Outside wealth at retirement
+ * @param {Decimal} params.superAtRetirement - Super wealth at retirement (if applicable)
+ * @param {Decimal} params.realReturn - Real return rate
+ * @param {Decimal} params.bequest - Desired bequest amount
+ * @param {number} params.maxSearchAge - Maximum age to search (default: lifeExpectancy - 5)
+ * @returns {Object} Rich viability result
+ */
+export function findEarliestViableAge({
+  currentAge,
+  lifeExpectancy, 
+  preservationAge,
+  outsideAtRetirement,
+  superAtRetirement,
+  realReturn,
+  bequest = new Decimal(0),
+  maxSearchAge
+}) {
+  const maxAge = maxSearchAge || Math.min(preservationAge + 5, lifeExpectancy - 10);
+  let earliestTheoreticalAge = null;
+  let earliestViableAge = null;
+  let limiting = 'none';
+  
+  // Search from current age to max search age
+  for (let R = currentAge; R <= maxAge; R++) {
+    // Try to solve for sustainable spending at this retirement age
+    const solution = solveSustainableSpending({
+      retirementAge: R,
+      lifeExpectancy,
+      outsideWealth: outsideAtRetirement,
+      superWealth: superAtRetirement, 
+      preservationAge,
+      realReturn,
+      bequest
+    });
+    
+    // If no sustainable solution exists, continue searching
+    if (solution.sustainableAnnual.lte(0)) {
+      continue;
+    }
+    
+    // This is the earliest theoretical age where horizon constraint is satisfied
+    if (!earliestTheoreticalAge) {
+      earliestTheoreticalAge = R;
+    }
+    
+    // Build spending schedule for bridge assessment
+    const schedule = buildSpendingSchedule({
+      R, L: lifeExpectancy, S: solution.sustainableAnnual.toNumber(), bands: solution.bands
+    });
+    
+    // Check bridge constraint
+    const bridgeAssessment = computeBridgeRequirement({
+      R, presAge: preservationAge, schedule,
+      outsideAtR: outsideAtRetirement.toNumber(), realReturn: realReturn.toNumber()
+    });
+    
+    // If bridge is covered, this is our earliest viable age
+    if (bridgeAssessment.covered) {
+      earliestViableAge = R;
+      limiting = R >= preservationAge ? 'horizon' : 'bridge';
+      
+      return {
+        earliestTheoreticalAge,
+        earliestViableAge,
+        viable: true,
+        limiting,
+        sustainableAnnual: solution.sustainableAnnual.toNumber(),
+        bridge: {
+          need: bridgeAssessment.neededPV,
+          have: bridgeAssessment.havePV, 
+          years: bridgeAssessment.years,
+          shortfall: Math.max(0, bridgeAssessment.neededPV - bridgeAssessment.havePV),
+          status: 'covered'
+        },
+        bands: solution.bands,
+        schedule
+      };
+    }
+  }
+  
+  // If we get here, no viable age found - return theoretical age info with bridge shortfall
+  if (earliestTheoreticalAge) {
+    const solution = solveSustainableSpending({
+      retirementAge: earliestTheoreticalAge,
+      lifeExpectancy,
+      outsideWealth: outsideAtRetirement,
+      superWealth: superAtRetirement,
+      preservationAge,
+      realReturn,
+      bequest
+    });
+    
+    const schedule = buildSpendingSchedule({
+      R: earliestTheoreticalAge, L: lifeExpectancy, S: solution.sustainableAnnual.toNumber(), bands: solution.bands
+    });
+    
+    const bridgeAssessment = computeBridgeRequirement({
+      R: earliestTheoreticalAge, presAge: preservationAge, schedule,
+      outsideAtR: outsideAtRetirement.toNumber(), realReturn: realReturn.toNumber()
+    });
+    
+    return {
+      earliestTheoreticalAge,
+      earliestViableAge: null,
+      viable: false,
+      limiting: 'bridge',
+      sustainableAnnual: solution.sustainableAnnual.toNumber(),
+      bridge: {
+        need: bridgeAssessment.neededPV,
+        have: bridgeAssessment.havePV,
+        years: bridgeAssessment.years,
+        shortfall: Math.max(0, bridgeAssessment.neededPV - bridgeAssessment.havePV),
+        status: 'short'
+      },
+      bands: solution.bands,
+      schedule
+    };
+  }
+  
+  // No theoretical age found either
+  return {
+    earliestTheoreticalAge: null,
+    earliestViableAge: null,
+    viable: false,
+    limiting: 'horizon',
+    sustainableAnnual: 0,
+    bridge: {
+      need: 0,
+      have: outsideAtRetirement.toNumber(),
+      years: 0,
+      shortfall: 0,
+      status: 'covered'
+    },
+    bands: [],
+    schedule: []
+  };
+}
