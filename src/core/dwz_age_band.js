@@ -9,6 +9,92 @@
 import Decimal from 'decimal.js-light';
 import { bandScheduleFor, pvSpendAtR, pvBridgeAtR, pvPostAtR } from './age_bands.js';
 
+// --- helpers & analyzer: constraint explainer functions ---
+
+/** Build a band-multiplier accessor from a bands array. */
+export function makeBandAtAge(bands = []) {
+  return (age) => {
+    for (const b of bands) {
+      const start = (b.start ?? b.from ?? 0);
+      const end   = (b.end ?? b.to ?? 200);
+      const mult  = (b.mult ?? b.multiplier ?? 1);
+      if (age >= start && age < end) return mult;
+    }
+    return 1;
+  };
+}
+
+/** Banded annuity factor for ages [startAge, endAgeExclusive). */
+export function bandedAnnuityFactor({ startAge, endAgeExclusive, bandAtAge, realReturn }) {
+  const r = new Decimal(realReturn ?? 0);
+  let sum = new Decimal(0);
+  for (let a = startAge; a < endAgeExclusive; a += 1) {
+    const k = new Decimal(bandAtAge ? bandAtAge(a) : 1);
+    if (r.isZero()) {
+      sum = sum.plus(k);
+    } else {
+      const n = new Decimal(a - startAge + 1);
+      sum = sum.plus(k.div(r.add(1).pow(n)));
+    }
+  }
+  return sum;
+}
+
+/** Discount a value at age X back to age R */
+export function discountToAgeR({ valueAtAgeX, R, X, realReturn }) {
+  const r = new Decimal(realReturn ?? 0);
+  if (r.isZero()) return new Decimal(valueAtAgeX ?? 0);
+  const n = new Decimal(Math.max(0, X - R));
+  return new Decimal(valueAtAgeX ?? 0).div(r.add(1).pow(n));
+}
+
+/**
+ * Analyze what binds S* at earliest R under age-band DWZ.
+ * Returns { type:'bridge'|'horizon', atAge, sBridgeMax, sTotalMax, epsilon }
+ */
+export function analyzeBindingConstraint(p) {
+  const {
+    R, L, preservationAge: P, realReturn,
+    bands, bandAtAge: bandAtAgeFn,
+    outsideNow, superAtPreservation, sustainableAnnual,
+  } = p;
+
+  const bandAtAge = bandAtAgeFn || makeBandAtAge(bands);
+
+  const A_bridge = (R >= P)
+    ? new Decimal(0)
+    : bandedAnnuityFactor({ startAge: R, endAgeExclusive: P, bandAtAge, realReturn });
+
+  const A_total = bandedAnnuityFactor({ startAge: R, endAgeExclusive: L, bandAtAge, realReturn });
+
+  const PV_super_R = (P <= R)
+    ? new Decimal(superAtPreservation ?? 0)
+    : discountToAgeR({ valueAtAgeX: superAtPreservation ?? 0, R, X: P, realReturn });
+
+  const outsideD = new Decimal(outsideNow ?? 0);
+
+  const sBridgeMax = A_bridge.isZero()
+    ? Infinity  // Return JS number Infinity for no bridge constraint
+    : outsideD.div(A_bridge).toNumber();
+
+  const sTotalMax = outsideD.plus(PV_super_R).div(A_total).toNumber();
+
+  const Sstar = new Decimal(sustainableAnnual ?? 0);
+  const epsCalc = Sstar.times(0.002);
+  const eps = epsCalc.gt(1) ? epsCalc.toNumber() : 1; // $1 or 0.2% of S*
+
+  const bridgeClearlyTighter = (sBridgeMax + eps) < sTotalMax;
+  const SnearBridge = Math.abs(Sstar.toNumber() - sBridgeMax) <= eps;
+
+  return {
+    type: (bridgeClearlyTighter || SnearBridge) ? 'bridge' : 'horizon',
+    atAge: (bridgeClearlyTighter || SnearBridge) ? P : L,
+    sBridgeMax: sBridgeMax,
+    sTotalMax: sTotalMax,
+    epsilon: eps,
+  };
+}
+
 /**
  * Solve for sustainable spending amount using age-band multipliers
  * @param {Object} params - Parameters object

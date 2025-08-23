@@ -1,18 +1,19 @@
 # 🇦🇺 Australian FIRE Calculator
 
-A comprehensive React-based calculator for Australians pursuing Financial Independence, Retire Early (FIRE) using the **Die-With-Zero methodology**. This tool helps you optimize retirement planning with accurate Australian tax calculations, superannuation modeling, and sustainable spending calculations that aim to spend all wealth by your life expectancy.
+A comprehensive React-based calculator for Australians pursuing Financial Independence, Retire Early (FIRE) using the **Die-With-Zero methodology with age-band spending**. This tool helps you optimize retirement planning with accurate Australian tax calculations, superannuation modeling, and sophisticated age-aware sustainable spending that accounts for changing lifestyle needs throughout retirement.
 
 ![Screenshot Placeholder](./screenshot.png)
 
 ## Features
 
 ### Core Calculator
-- **Global Results Banner**: Real-time retirement viability displayed prominently under page title
+- **Global Results Banner**: Real-time retirement viability with earliest retirement age focus
+- **Age-Band Spending**: Go-go (1.10×), slow-go (1.00×), and no-go (0.85×) spending multipliers
 - **Australian Tax Calculations**: Uses 2024-25 tax brackets including Medicare Levy and Surcharge
 - **HECS/HELP Debt**: Comprehensive repayment calculation with 2024-25 thresholds
 - **Superannuation Modeling**: 12% employer super contributions with $260,280 cap
-- **Die-With-Zero Engine**: Sophisticated sustainable spending calculations with stepped pre/post-super phases
-- **Planning Modes**: Choose between earliest retirement age or pin target age planning
+- **Die-With-Zero Engine**: Sophisticated sustainable spending with realistic age-based patterns
+- **Earliest FIRE Focus**: Simplified UI centered on earliest possible retirement
 
 ### Investment Assumptions
 - **Expected Returns**: Adjustable 4-12% with helpful tooltips (ASX200 ~10%, Global ~8%)
@@ -37,14 +38,15 @@ A comprehensive React-based calculator for Australians pursuing Financial Indepe
 - **Real-time Confidence**: Shows assumptions basis for all calculations
 - **Advanced Super Strategy**: Collapsible section with salary sacrifice optimization and insurance analysis
 
-### Die-With-Zero (DWZ) Engine - Primary Planning Method
-- **Robust Mathematical Solver**: Uses bisection algorithm to find maximum sustainable spend
-- **Global Results Banner**: Prominent display of retirement viability and sustainable spending
-- **Dynamic Chart Markers**: Shows earliest FIRE age or target age based on planning mode
+### Die-With-Zero (DWZ) Engine with Age-Band Spending - Primary Planning Method
+- **Age-Band Multipliers**: Go-go years (R-60): 110%, slow-go years (60-75): 100%, no-go years (75+): 85%
+- **Realistic Spending Patterns**: Accounts for declining spending capacity as you age
+- **Enhanced Chart Visualization**: Age-band transition markers at 60 and 75 with spending annotations
+- **Global Results Banner**: Prominent display of earliest retirement age and base sustainable spending
 - **Bridge Period Validation**: Enforces outside-super-only constraint before preservation age (60)
-- **Couples Mode Support**: Handles two-partner scenarios with different preservation ages
-- **Earliest FIRE Age**: Binary search to find minimum retirement age for target spending
-- **Stepped Spending Phases**: Different sustainable spending before and after super access
+- **Unified Interface**: Simplified DWZ-only mode without confusing target-age flows
+- **Earliest FIRE Focus**: Binary search to find minimum retirement age for target spending
+- **Bequest Planning**: Comprehensive bequest target support with life expectancy calculations
 - **Real Dollar Consistency**: All calculations in inflation-adjusted terms
 
 ## How to Run Locally
@@ -109,22 +111,24 @@ All financial calculations use `decimal.js-light` (v2.5.1) to ensure precision a
 - **Wealth Growth**: Compound interest with annual contributions
 - **Super Contributions**: 12% of pre-tax income (capped at $260,280)
 
-### Retirement Planning - Die-With-Zero Methodology
-- **Sustainable Spending**: Dynamic calculations based on wealth depletion to life expectancy
-- **Stepped Phases**: Different spending rates before and after superannuation access (age 60)
-- **Global Banner Display**: Immediate feedback on retirement viability and spending capacity
-- **Planning Mode Integration**: Earliest retirement vs target age planning with appropriate chart markers
+### Retirement Planning - Die-With-Zero with Age-Band Methodology
+- **Age-Band Spending**: Realistic spending patterns across go-go (110%), slow-go (100%), and no-go (85%) phases
+- **Dynamic Chart Markers**: Visual indicators for age-band transitions at 60 and 75 with spending annotations
+- **Earliest FIRE Focus**: UI simplified to focus on earliest possible retirement age
+- **Global Banner Display**: Shows base sustainable spending with age-band adjustments
 - **Super Access**: Preservation age rules (can't access before 60) built into calculations
+- **Bequest Integration**: Comprehensive bequest target planning with life expectancy considerations
 
 ## Known Issues & Development Status
 
 ### DWZ Engine Status ✅ 
-- **Global Banner Integration**: ✅ Complete - Real-time retirement status prominently displayed
-- **UI Consistency**: ✅ Complete - All interface elements use DWZ-only methodology 
-- **Planning Modes**: ✅ Complete - Earliest vs target age with dynamic chart markers
+- **Age-Band Spending**: ✅ Complete - Go-go/slow-go/no-go spending multipliers fully implemented
+- **Enhanced Chart Visualization**: ✅ Complete - Age-band transition markers and spending annotations
+- **DWZ-Only Interface**: ✅ Complete - Simplified UI with earliest FIRE focus, removed legacy target flows
+- **Global Banner Integration**: ✅ Complete - Shows base sustainable spending with age-band context
 - **Bridge Constraint Solver**: ✅ Working - Enforces outside-money-only constraint during bridge period
-- **Couples Mode**: ✅ Working - Basic two-partner DWZ calculations implemented  
-- **Test Coverage**: ✅ 23/23 tests passing, including bridge constraint validation tests
+- **Bequest Planning**: ✅ Complete - Comprehensive bequest target support across all scenarios
+- **Test Coverage**: ✅ 200+ tests passing, including age-band depletion and chart marker validation
 
 ### Future Enhancements
 
