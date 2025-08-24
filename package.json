@@ -1,5 +1,5 @@
 {
-  "name": "aussie-fire",
+  "name": "aussie-fire-monorepo",
   "private": true,
   "version": "0.1.2",
   "description": "A comprehensive React-based calculator for Australians pursuing Financial Independence, Retire Early (FIRE) with accurate tax calculations and superannuation modeling",
@@ -20,12 +20,21 @@
   "author": "Josh Torkington <josh@torkington.au>",
   "license": "MIT",
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "build:core": "npm -w packages/dwz-core run build",
+    "test:core": "npm -w packages/dwz-core run test",
+    "dev:v2": "npm -w apps/dwz-v2 run dev",
+    "build:v2": "npm -w apps/dwz-v2 run build",
+    "preview:v2": "npm -w apps/dwz-v2 run preview"
   },
   "dependencies": {
     "decimal.js-light": "^2.5.1",
