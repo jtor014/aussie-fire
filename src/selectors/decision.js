@@ -2,7 +2,7 @@ import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz
 import { computeDwzStepped, isSteppedPlanViable, earliestFireAgeSteppedDWZ, getSteppedConstraint } from '../core/dwz_stepped.js';
 import { solveSustainableSpending, findEarliestRetirement, findEarliestViableAge, checkConstraintViolations, analyzeBindingConstraint, makeBandAtAge } from '../core/dwz_age_band.js';
 import { normalizeBandSettings, createFlatSchedule, createAgeBandedSchedule } from '../lib/validation/ageBands.js';
-import { buildDwzDepletionPath } from '../core/age_bands.js';
+import { buildDwzDepletionPath, computeBridgeFromSchedule } from '../core/age_bands.js';
 import { getPreservationAge } from '../core/preservation.js';
 import Decimal from 'decimal.js-light';
 
@@ -234,17 +234,29 @@ export function decisionFromState(state, rules) {
     });
   }
 
-  // T-023: Epsilon clamp for bridge assessment to prevent "Need $0... Short" contradictions
-  const epsilon = 1; // $1 tolerance - TODO: use EPSILON_CASH from constants
-  const bridgeData = viabilityResult.bridge || {};
-  const requiredOutside = Math.max(0, bridgeData.need || 0);
-  const availableOutside = bridgeData.have || 0;
-  const yearsNeeded = bridgeData.years || 0;
-  const shortfall = Math.max(0, requiredOutside - availableOutside);
+  // T-025: Unified bridge calculation using DWZ spending schedule
+  const epsilon = 1; // $1 tolerance for "covered" determination
   
-  // Apply epsilon clamp: if shortfall is essentially zero, mark as covered
-  const isBridgeCovered = shortfall <= epsilon || yearsNeeded <= 0;
-  const bridgeStatus = isBridgeCovered ? 'covered' : 'short';
+  const bridgeCalc = computeBridgeFromSchedule({
+    startAge: targetAge,
+    S_base: solution.sustainableAnnual.toNumber(),
+    bands: targetBands.map(band => ({
+      startAge: band.startAge,
+      endAge: band.endAge,
+      multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber()
+    })),
+    outsideAtRetire: outsideWealth.toNumber(),
+    preservationAge: P,
+    epsilon
+  });
+  
+  // Use the unified calculation
+  const requiredOutside = bridgeCalc.needTotal;
+  const availableOutside = bridgeCalc.haveTotal;
+  const yearsNeeded = bridgeCalc.years;
+  const shortfall = bridgeCalc.shortfall;
+  const isBridgeCovered = bridgeCalc.isCovered;
+  const bridgeStatus = bridgeCalc.status;
   
   // T-024: Build true DWZ depletion path with correct bands
   const depletionPath = buildDwzDepletionPath({
@@ -269,10 +281,17 @@ export function decisionFromState(state, rules) {
     }
   });
   
-  // T-023/T-024: Unified DWZ output bundle with depletion path
+  // T-025: Unified DWZ output bundle with schedule-driven bridge
   const dwz = {
     sustainableAnnual: solution.sustainableAnnual.toNumber(),
-    bandSchedule: viabilityResult.schedule || bands.map(band => ({
+    bands: targetBands.map(band => ({
+      fromAge: band.startAge,
+      toAge: band.endAge,
+      multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber(),
+      name: band.name || 'phase'
+    })),
+    // Legacy field mapping for backward compatibility
+    bandSchedule: targetBands.map(band => ({
       from: band.startAge,
       to: band.endAge,
       multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber(),
@@ -282,12 +301,18 @@ export function decisionFromState(state, rules) {
     earliestViableAge: viabilityResult.earliestViableAge,
     isViable: viabilityResult.viable && isBridgeCovered,
     bridge: {
+      // T-025: Unified bridge fields
+      years: bridgeCalc.years,
+      needTotal: bridgeCalc.needTotal,
+      haveTotal: bridgeCalc.haveTotal,
+      shortfall: bridgeCalc.shortfall,
+      isCovered: bridgeCalc.isCovered,
+      status: bridgeCalc.status,
+      // Legacy field mapping for backward compatibility
       requiredOutside,
       availableOutside,
       yearsNeeded,
-      yearsShort: Math.max(0, yearsNeeded - (isBridgeCovered ? yearsNeeded : 0)),
-      shortfall: isBridgeCovered ? 0 : shortfall,
-      status: bridgeStatus
+      yearsShort: Math.max(0, yearsNeeded - (isBridgeCovered ? yearsNeeded : 0))
     },
     path: depletionPath,
     preservationAge: P

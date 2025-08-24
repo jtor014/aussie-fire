@@ -5,8 +5,98 @@
  * - Go-go years (R to 60): 1.10× sustainable spending
  * - Slow-go years (60 to 75): 1.00× sustainable spending  
  * - No-go years (75 to L): 0.85× sustainable spending
+ * 
+ * T-025: Unified DWZ schedule with scale-invariant depletion
  */
 import Decimal from 'decimal.js-light';
+
+/**
+ * Get the band multiplier for a specific age
+ * T-025: Helper for unified spending schedule
+ * 
+ * @param {number} age - Age to look up
+ * @param {Array} bands - Band schedule with startAge, endAge, multiplier
+ * @param {number} defaultMult - Default multiplier if no band found (default: 1)
+ * @returns {number} Multiplier for this age
+ */
+export function bandMultiplierAt(age, bands = [], defaultMult = 1) {
+  if (!bands || bands.length === 0) return defaultMult;
+  
+  for (const band of bands) {
+    if (age >= band.startAge && age < band.endAge) {
+      return typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber();
+    }
+  }
+  
+  return defaultMult;
+}
+
+/**
+ * Calculate annual spending for a specific age using DWZ schedule
+ * T-025: Core spending calculation
+ * 
+ * @param {number} age - Age to calculate spending for
+ * @param {number} S_base - Base sustainable annual spending (real dollars)
+ * @param {Array} bands - Band schedule
+ * @returns {number} Annual spending for this age (real dollars)
+ */
+export function annualSpendFor(age, S_base, bands) {
+  return S_base * bandMultiplierAt(age, bands, 1);
+}
+
+/**
+ * Compute bridge requirement from DWZ spending schedule
+ * T-025: Scale-invariant bridge calculation using actual spending schedule
+ * 
+ * @param {Object} params
+ * @param {number} params.startAge - Retirement age
+ * @param {number} params.S_base - Base sustainable spending (real dollars)
+ * @param {Array} params.bands - Age-band schedule
+ * @param {number} params.outsideAtRetire - Outside wealth at retirement
+ * @param {number} params.preservationAge - Super preservation age
+ * @param {number} params.epsilon - Tolerance for "covered" determination
+ * @returns {Object} Bridge assessment {years, needTotal, haveTotal, isCovered}
+ */
+export function computeBridgeFromSchedule({
+  startAge,
+  S_base,
+  bands,
+  outsideAtRetire,
+  preservationAge,
+  epsilon = 1
+}) {
+  // If no bridge period, return zero requirement
+  if (startAge >= preservationAge) {
+    return {
+      years: 0,
+      needTotal: 0,
+      haveTotal: outsideAtRetire,
+      isCovered: true,
+      status: 'covered'
+    };
+  }
+  
+  const bridgeYears = preservationAge - startAge;
+  let needTotal = 0;
+  
+  // Sum actual spending requirements for each bridge year
+  for (let age = startAge; age < preservationAge; age++) {
+    needTotal += annualSpendFor(age, S_base, bands);
+  }
+  
+  const haveTotal = outsideAtRetire;
+  const shortfall = Math.max(0, needTotal - haveTotal);
+  const isCovered = shortfall <= epsilon;
+  
+  return {
+    years: bridgeYears,
+    needTotal,
+    haveTotal,
+    shortfall: isCovered ? 0 : shortfall,
+    isCovered,
+    status: isCovered ? 'covered' : 'short'
+  };
+}
 
 /**
  * Build a yearly spending schedule using age bands and base sustainable spending
@@ -92,10 +182,12 @@ export function buildDwzDepletionPath({
     const bandInfo = getBandInfo(age);
     const isRetired = age >= retirementAge;
     
-    // Calculate spending for this year
+    // Calculate spending for this year using unified schedule
     let yearSpend = 0;
     if (isRetired) {
-      yearSpend = sustainableAnnual * bandInfo.multiplier;
+      yearSpend = annualSpendFor(age, sustainableAnnual, 
+        bands ? bands.map(b => ({...b, multiplier: Number(b.multiplier || 1)})) : []
+      );
     }
     
     // Add current state to path BEFORE any deductions
