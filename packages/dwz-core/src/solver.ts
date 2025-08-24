@@ -23,6 +23,14 @@ export type Inputs = {
 
   // bequest target in real dollars (0 for classic DWZ)
   bequest: number;
+
+  // Optional pre-FIRE savings split policy
+  preFireSavingsSplit?: {
+    toSuperPct: number;         // 0..1 desired split to super (gross, before 15% contrib tax)
+    capPerPerson: number;       // concessional cap per eligible person
+    eligiblePeople: number;     // 1 or 2 typically
+    contribTaxRate: number;     // usually 0.15
+  };
 };
 
 export type SolverPathPoint = {
@@ -71,8 +79,25 @@ export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverP
   let sup = inp.super0;
 
   while (age < retireAge) {
-    // deposit savings at the start of the year (simple model) to OUTSIDE
-    outside += inp.annualSavings;
+    // Apply savings split if configured, otherwise all to outside (backward compatible)
+    const totalSavings = inp.annualSavings;
+    if (totalSavings > 0) {
+      const split = inp.preFireSavingsSplit;
+      if (split) {
+        const pct = Math.min(1, Math.max(0, split.toSuperPct ?? 0));
+        const desiredSuperGross = totalSavings * pct;
+        const capTotal = Math.max(0, split.capPerPerson * split.eligiblePeople);
+        const superGross = Math.min(desiredSuperGross, capTotal);
+        const superNet = superGross * (1 - (split.contribTaxRate ?? 0.15));
+        const outsideNet = totalSavings - superGross;
+        
+        outside += outsideNet;
+        sup += superNet;
+      } else {
+        // Backward-compatible: all to outside
+        outside += totalSavings;
+      }
+    }
 
     // grow both piles to end of year
     outside = grow(outside, inp.realReturn);

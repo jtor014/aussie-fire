@@ -1,6 +1,7 @@
 import { Assumptions, Band, Bridge, DecisionDwz, Household, PathPoint, LifecyclePhase } from "./types.js";
 export * from "./types.js";
 export * from "./solver.js";
+export { optimizeSavingsSplit } from "./optimizer/savingsSplit.js";
 
 const EPS = 1;
 const clampRate = (r: number) => Math.max(-0.99, r);
