@@ -54,7 +54,8 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
 
   if (isViable) {
     // Green message: fully viable retirement
-    const desiredSpend = formatMoney(decisionKpis.sustainableAnnual || decisionKpis.planSpend || 0);
+    // T-025: Use unified DWZ sustainableAnnual
+    const desiredSpend = formatMoney(dwz?.sustainableAnnual || decisionKpis.sustainableAnnual || decisionKpis.planSpend || 0);
     mainMessage = (
       <>
         🎯 You can retire at age <strong>{earliestFireAge}</strong> with Die-With-Zero
@@ -65,13 +66,14 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
         Sustainable spending: <strong>${desiredSpend}/yr</strong> (L={lifeExpectancy}, Bequest=${formatMoney(bequest)})
       </>
     );
-  } else if (decisionKpis?.earliestTheoreticalAge) {
+  } else if (decisionKpis?.earliestTheoreticalAge || dwz?.earliestTheoreticalAge) {
     // Amber message: theoretical age exists but bridge constraint fails
-    const theoreticalAge = decisionKpis.earliestTheoreticalAge;
+    const theoreticalAge = dwz?.earliestTheoreticalAge || decisionKpis.earliestTheoreticalAge;
+    // T-025: Use unified bridge fields
     const shortfall = bridge.shortfall || 0;
     const years = bridge.years || 0;
-    const need = bridge.need || 0;
-    const have = bridge.have || 0;
+    const need = bridge.needTotal || bridge.need || 0;
+    const have = bridge.haveTotal || bridge.have || 0;
     
     mainMessage = (
       <>

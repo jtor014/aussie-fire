@@ -2,6 +2,7 @@ import { dwzFromSingleState, maxSpendDWZSingleWithConstraint } from '../core/dwz
 import { computeDwzStepped, isSteppedPlanViable, earliestFireAgeSteppedDWZ, getSteppedConstraint } from '../core/dwz_stepped.js';
 import { solveSustainableSpending, findEarliestRetirement, findEarliestViableAge, checkConstraintViolations, analyzeBindingConstraint, makeBandAtAge } from '../core/dwz_age_band.js';
 import { normalizeBandSettings, createFlatSchedule, createAgeBandedSchedule } from '../lib/validation/ageBands.js';
+import { buildDwzDepletionPath, computeBridgeFromSchedule } from '../core/age_bands.js';
 import { getPreservationAge } from '../core/preservation.js';
 import Decimal from 'decimal.js-light';
 
@@ -145,7 +146,22 @@ export function decisionFromState(state, rules) {
   // Get wealth at target age for final solution
   const { outsideWealth, superWealth } = getWealthAtAge(targetAge);
 
-  // Solve sustainable spending at target age with custom bands
+  // T-024: Re-generate bands for the actual target age (not the original retirement age)
+  let targetBands = bands;
+  if (targetAge !== retirementAge) {
+    if (ageBandsEnabled) {
+      const normalized = normalizeBandSettings({
+        R: targetAge,
+        L: lifeExpectancy,
+        settings: ageBandSettings
+      });
+      targetBands = createAgeBandedSchedule(targetAge, lifeExpectancy, normalized.settings);
+    } else {
+      targetBands = createFlatSchedule(targetAge, lifeExpectancy);
+    }
+  }
+
+  // Solve sustainable spending at target age with correct bands
   const solution = solveSustainableSpending({
     retirementAge: targetAge,
     lifeExpectancy,
@@ -154,7 +170,7 @@ export function decisionFromState(state, rules) {
     preservationAge: P,
     realReturn,
     bequest: new Decimal(bequest),
-    bands: bands
+    bands: targetBands
   });
 
   // Check if viable at target spending level
@@ -218,22 +234,64 @@ export function decisionFromState(state, rules) {
     });
   }
 
-  // T-023: Epsilon clamp for bridge assessment to prevent "Need $0... Short" contradictions
-  const epsilon = 1; // $1 tolerance - TODO: use EPSILON_CASH from constants
-  const bridgeData = viabilityResult.bridge || {};
-  const requiredOutside = Math.max(0, bridgeData.need || 0);
-  const availableOutside = bridgeData.have || 0;
-  const yearsNeeded = bridgeData.years || 0;
-  const shortfall = Math.max(0, requiredOutside - availableOutside);
+  // T-025: Unified bridge calculation using DWZ spending schedule
+  const epsilon = 1; // $1 tolerance for "covered" determination
   
-  // Apply epsilon clamp: if shortfall is essentially zero, mark as covered
-  const isBridgeCovered = shortfall <= epsilon || yearsNeeded <= 0;
-  const bridgeStatus = isBridgeCovered ? 'covered' : 'short';
+  const bridgeCalc = computeBridgeFromSchedule({
+    startAge: targetAge,
+    S_base: solution.sustainableAnnual.toNumber(),
+    bands: targetBands.map(band => ({
+      startAge: band.startAge,
+      endAge: band.endAge,
+      multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber()
+    })),
+    outsideAtRetire: outsideWealth.toNumber(),
+    preservationAge: P,
+    epsilon
+  });
   
-  // T-023: Unified DWZ output bundle
+  // Use the unified calculation
+  const requiredOutside = bridgeCalc.needTotal;
+  const availableOutside = bridgeCalc.haveTotal;
+  const yearsNeeded = bridgeCalc.years;
+  const shortfall = bridgeCalc.shortfall;
+  const isBridgeCovered = bridgeCalc.isCovered;
+  const bridgeStatus = bridgeCalc.status;
+  
+  // T-024: Build true DWZ depletion path with correct bands
+  const depletionPath = buildDwzDepletionPath({
+    currentAge: state.currentAge,
+    retirementAge: targetAge,
+    lifeExpectancy,
+    sustainableAnnual: solution.sustainableAnnual.toNumber(),
+    bands: targetBands.map(band => ({
+      startAge: band.startAge,
+      endAge: band.endAge,
+      multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber(),
+      name: band.name || 'phase'
+    })),
+    preservationAge: P,
+    realReturn: realReturn.toNumber(),
+    fees: (state.investmentFees || 0) / 100,
+    insurancePremium: state.superInsurancePremium || 0,
+    bequest: bequest,
+    startBalances: {
+      outside: outsideWealth.toNumber(),
+      super: superWealth.toNumber()
+    }
+  });
+  
+  // T-025: Unified DWZ output bundle with schedule-driven bridge
   const dwz = {
     sustainableAnnual: solution.sustainableAnnual.toNumber(),
-    bandSchedule: viabilityResult.schedule || bands.map(band => ({
+    bands: targetBands.map(band => ({
+      fromAge: band.startAge,
+      toAge: band.endAge,
+      multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber(),
+      name: band.name || 'phase'
+    })),
+    // Legacy field mapping for backward compatibility
+    bandSchedule: targetBands.map(band => ({
       from: band.startAge,
       to: band.endAge,
       multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber(),
@@ -243,13 +301,21 @@ export function decisionFromState(state, rules) {
     earliestViableAge: viabilityResult.earliestViableAge,
     isViable: viabilityResult.viable && isBridgeCovered,
     bridge: {
+      // T-025: Unified bridge fields
+      years: bridgeCalc.years,
+      needTotal: bridgeCalc.needTotal,
+      haveTotal: bridgeCalc.haveTotal,
+      shortfall: bridgeCalc.shortfall,
+      isCovered: bridgeCalc.isCovered,
+      status: bridgeCalc.status,
+      // Legacy field mapping for backward compatibility
       requiredOutside,
       availableOutside,
       yearsNeeded,
-      yearsShort: Math.max(0, yearsNeeded - (isBridgeCovered ? yearsNeeded : 0)),
-      shortfall: isBridgeCovered ? 0 : shortfall,
-      status: bridgeStatus
-    }
+      yearsShort: Math.max(0, yearsNeeded - (isBridgeCovered ? yearsNeeded : 0))
+    },
+    path: depletionPath,
+    preservationAge: P
   };
 
   return {
@@ -259,6 +325,8 @@ export function decisionFromState(state, rules) {
     earliestFireAge: dwz.earliestViableAge,
     earliestTheoreticalAge: dwz.earliestTheoreticalAge,
     shortfallPhase,
+    // T-024: Add preservationAge for tests
+    preservationAge: P,
     // T-023: Unified DWZ bundle
     dwz,
     kpis: {
@@ -269,6 +337,13 @@ export function decisionFromState(state, rules) {
       limiting: viabilityResult.limiting,
       // T-023: Use epsilon-clamped bridge data
       bridge: dwz.bridge,
+      // T-024: Backward compatibility - tests expect bridgeAssessment
+      bridgeAssessment: {
+        neededPV: dwz.bridge.requiredOutside,
+        havePV: dwz.bridge.availableOutside,
+        years: dwz.bridge.yearsNeeded,
+        covered: dwz.bridge.status === 'covered'
+      },
       
       sustainableAnnual: dwz.sustainableAnnual,
       bands: ageBandsEnabled ? bands.map(band => ({
