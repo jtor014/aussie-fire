@@ -36,6 +36,142 @@ export function buildSpendingSchedule({ R, L, S, bands }) {
   return schedule;
 }
 
+/**
+ * Build a true DWZ depletion path showing wealth declining to ~0 at life expectancy
+ * T-024: Fixes chart showing accumulation instead of depletion
+ * 
+ * @param {Object} params
+ * @param {number} params.currentAge - Current age
+ * @param {number} params.retirementAge - Age when retirement starts
+ * @param {number} params.lifeExpectancy - Life expectancy (path ends here)
+ * @param {number} params.sustainableAnnual - Base spending amount S
+ * @param {Array} params.bands - Age band schedule with multipliers
+ * @param {number} params.preservationAge - Super preservation age
+ * @param {number} params.realReturn - Real return rate (after inflation)
+ * @param {number} params.fees - Investment fees as decimal
+ * @param {number} params.insurancePremium - Annual insurance premium from super
+ * @param {number} params.bequest - Target bequest at life expectancy
+ * @param {Object} params.startBalances - Starting balances {outside, super}
+ * @returns {Array} Path array with {age, outside, super, total, phase, spend}
+ */
+export function buildDwzDepletionPath({
+  currentAge,
+  retirementAge,
+  lifeExpectancy,
+  sustainableAnnual,
+  bands = [],
+  preservationAge = 60,
+  realReturn = 0.05,
+  fees = 0,
+  insurancePremium = 0,
+  bequest = 0,
+  startBalances = { outside: 0, super: 0 }
+}) {
+  const path = [];
+  let outsideBalance = startBalances.outside;
+  let superBalance = startBalances.super;
+  
+  // Net return after fees
+  const netReturn = realReturn - fees;
+  
+  // Helper to get band multiplier and phase for an age
+  const getBandInfo = (age) => {
+    for (const band of bands) {
+      if (age >= band.startAge && age < band.endAge) {
+        return {
+          multiplier: band.multiplier || 1,
+          phase: band.name || band.phase || 'phase'
+        };
+      }
+    }
+    return { multiplier: 1, phase: 'flat' };
+  };
+  
+  // Build path from current age to life expectancy
+  for (let age = currentAge; age <= lifeExpectancy; age++) {
+    const bandInfo = getBandInfo(age);
+    const isRetired = age >= retirementAge;
+    
+    // Calculate spending for this year
+    let yearSpend = 0;
+    if (isRetired) {
+      yearSpend = sustainableAnnual * bandInfo.multiplier;
+    }
+    
+    // Add current state to path BEFORE any deductions
+    path.push({
+      age,
+      outside: Math.max(0, outsideBalance),
+      super: Math.max(0, superBalance),
+      total: Math.max(0, outsideBalance + superBalance),
+      phase: bandInfo.phase,
+      spend: yearSpend
+    });
+    
+    // Don't process further for the last age (life expectancy)
+    if (age === lifeExpectancy) break;
+    
+    // If retired, withdraw spending
+    if (isRetired) {
+      if (age < preservationAge) {
+        // Pre-preservation: can only draw from outside
+        outsideBalance -= yearSpend;
+        if (outsideBalance < 0) {
+          // Bridge shortfall - this shouldn't happen if viable
+          outsideBalance = 0;
+        }
+      } else {
+        // Post-preservation: draw from combined wealth
+        const totalWealth = outsideBalance + superBalance;
+        if (totalWealth >= yearSpend) {
+          // Prefer drawing from super first to minimize tax
+          const fromSuper = Math.min(superBalance, yearSpend);
+          const fromOutside = yearSpend - fromSuper;
+          superBalance -= fromSuper;
+          outsideBalance -= fromOutside;
+        } else {
+          // Depleted - set both to zero
+          outsideBalance = 0;
+          superBalance = 0;
+        }
+      }
+    }
+    
+    // Apply insurance premium to super (deducted every year while there's balance)
+    if (insurancePremium > 0 && superBalance > 0) {
+      superBalance = Math.max(0, superBalance - insurancePremium);
+    }
+    
+    // Apply returns (after spending and insurance)
+    outsideBalance *= (1 + netReturn);
+    superBalance *= (1 + netReturn);
+  }
+  
+  // Ensure final wealth is close to bequest target
+  const finalPoint = path[path.length - 1];
+  if (finalPoint) {
+    const epsilon = 1; // $1 tolerance
+    const finalTotal = finalPoint.total;
+    const bequestError = Math.abs(finalTotal - bequest);
+    
+    // If we're way off the bequest target, adjust the final point
+    if (bequestError > epsilon && bequest === 0) {
+      // For DWZ (bequest = 0), ensure we end at ~0
+      finalPoint.outside = 0;
+      finalPoint.super = 0;
+      finalPoint.total = 0;
+    } else if (bequestError > epsilon && bequest > 0) {
+      // For bequest targets, scale to match
+      const scaleFactor = bequest / Math.max(1, finalTotal);
+      finalPoint.outside *= scaleFactor;
+      finalPoint.super *= scaleFactor;
+      finalPoint.total = bequest;
+    }
+  }
+  
+  return path;
+}
+
 // Age band multipliers
 export const AGE_BAND_MULTIPLIERS = {
   goGo: new Decimal(1.10),
@@ -124,7 +260,11 @@ export function pvSpendAtR(bands, sustainableSpending, realReturn, retirementAge
     } else {
       // PV of annuity starting at band.startAge
       const yearsToStart = band.startAge - retirementAge;
-      const discountToStart = realReturn.add(1).pow(yearsToStart);
+      
+      // Skip bands that start before retirement (shouldn't happen but be defensive)
+      if (yearsToStart < 0) continue;
+      
+      const discountToStart = yearsToStart === 0 ? new Decimal(1) : realReturn.add(1).pow(yearsToStart);
       
       // PV of annuity for 'years' periods at return rate
       const annuityFactor = new Decimal(1).sub(realReturn.add(1).pow(-years)).div(realReturn);

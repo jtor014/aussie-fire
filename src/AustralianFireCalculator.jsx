@@ -831,6 +831,7 @@ const AustralianFireCalculator = () => {
     hecsDebt, hasPrivateHealth, additionalSuperContributions,
     hasInsuranceInSuper, insurancePremiums,
     expectedReturn, investmentFees,
+    bequest, // T-024: Added bequest to dependencies so decision recomputes on change
     inflationRate, adjustForInflation, dieWithZeroMode,
     planningAs, partnerB,
     // T-018: Age-band dependencies
@@ -1023,22 +1024,35 @@ const AustralianFireCalculator = () => {
   const fireAgeForUi = dwzEarliestAge ?? retirementAge;
   const yearsToFreedom = kpis.yearsToFreedom;
 
-  // Chart data generation using DWZ depletion path
+  // T-024: Chart data generation using true DWZ depletion path from decision
   const chartDataSingle = useMemo(() => {
-    if (!depletionData?.path) {
-      return [];
+    // Use the depletion path from the unified decision DWZ bundle
+    if (!decision?.dwz?.path) {
+      // Fallback to legacy depletion data if available
+      if (!depletionData?.path) {
+        return [];
+      }
+      return depletionData.path.map(point => ({
+        age: point.age,
+        outsideSuper: point.outside,
+        superBalance: point.super,
+        totalWealth: point.total,
+        spendToZeroWealth: point.total,
+        spend: point.spend
+      }));
     }
 
-    // Convert depletion path to chart format
-    return depletionData.path.map(point => ({
+    // T-024: Use the true DWZ depletion path that actually subtracts spending
+    return decision.dwz.path.map(point => ({
       age: point.age,
       outsideSuper: point.outside,
       superBalance: point.super,
       totalWealth: point.total,
-      spendToZeroWealth: point.total, // Same as total wealth in DWZ
-      spend: point.spend
+      spendToZeroWealth: point.total, // Should taper to ~0 at life expectancy
+      spend: point.spend,
+      phase: point.phase // T-024: Include phase for tooltip/shading
     }));
-  }, [depletionData]);
+  }, [decision?.dwz?.path, depletionData]);
 
   const chartDataCouple = useMemo(() => {
     // Couple planning not fully supported in DWZ-only refactor
