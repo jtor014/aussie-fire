@@ -937,10 +937,17 @@ const AustralianFireCalculator = () => {
       netReturn: kpis.netReturn,
       realReturn: kpis.realReturn,
       // fireNumber removed for DWZ-only mode
-      // T-021: Use unified bridge assessment from decision solver
-      bridgePeriodFeasible: decision.kpis.bridgeAssessment?.covered || false,
-      bridgePeriodShortfall: decision.kpis.bridgeAssessment ? Math.max(0, decision.kpis.bridgeAssessment.neededPV - decision.kpis.bridgeAssessment.havePV) : 0,
-      bridgePeriodDetails: decision.kpis.bridgeAssessment ? {
+      // T-023: Use unified DWZ bridge data with epsilon handling
+      bridgePeriodFeasible: decision.dwz?.bridge?.status === 'covered' || decision.kpis.bridgeAssessment?.covered || false,
+      bridgePeriodShortfall: decision.dwz?.bridge?.shortfall || (decision.kpis.bridgeAssessment ? Math.max(0, decision.kpis.bridgeAssessment.neededPV - decision.kpis.bridgeAssessment.havePV) : 0),
+      bridgePeriodDetails: decision.dwz?.bridge ? {
+        needsBridge: decision.dwz.bridge.yearsNeeded > 0,
+        bridgeYears: decision.dwz.bridge.yearsNeeded,
+        fundsNeeded: decision.dwz.bridge.requiredOutside,
+        fundsAvailable: decision.dwz.bridge.availableOutside,
+        feasible: decision.dwz.bridge.status === 'covered',
+        shortfall: decision.dwz.bridge.shortfall
+      } : decision.kpis.bridgeAssessment ? {
         needsBridge: decision.kpis.bridgeAssessment.years > 0,
         bridgeYears: decision.kpis.bridgeAssessment.years,
         fundsNeeded: decision.kpis.bridgeAssessment.neededPV,
