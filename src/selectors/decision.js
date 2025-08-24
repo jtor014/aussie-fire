@@ -219,7 +219,7 @@ export function decisionFromState(state, rules) {
   }
 
   // T-023: Epsilon clamp for bridge assessment to prevent "Need $0... Short" contradictions
-  const epsilon = 1; // $1 tolerance
+  const epsilon = 1; // $1 tolerance - TODO: use EPSILON_CASH from constants
   const bridgeData = viabilityResult.bridge || {};
   const requiredOutside = Math.max(0, bridgeData.need || 0);
   const availableOutside = bridgeData.have || 0;
