@@ -218,23 +218,59 @@ export function decisionFromState(state, rules) {
     });
   }
 
+  // T-023: Epsilon clamp for bridge assessment to prevent "Need $0... Short" contradictions
+  const epsilon = 1; // $1 tolerance
+  const bridgeData = viabilityResult.bridge || {};
+  const requiredOutside = Math.max(0, bridgeData.need || 0);
+  const availableOutside = bridgeData.have || 0;
+  const yearsNeeded = bridgeData.years || 0;
+  const shortfall = Math.max(0, requiredOutside - availableOutside);
+  
+  // Apply epsilon clamp: if shortfall is essentially zero, mark as covered
+  const isBridgeCovered = shortfall <= epsilon || yearsNeeded <= 0;
+  const bridgeStatus = isBridgeCovered ? 'covered' : 'short';
+  
+  // T-023: Unified DWZ output bundle
+  const dwz = {
+    sustainableAnnual: solution.sustainableAnnual.toNumber(),
+    bandSchedule: viabilityResult.schedule || bands.map(band => ({
+      from: band.startAge,
+      to: band.endAge,
+      multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber(),
+      name: band.name || 'phase'
+    })),
+    earliestTheoreticalAge: viabilityResult.earliestTheoreticalAge,
+    earliestViableAge: viabilityResult.earliestViableAge,
+    isViable: viabilityResult.viable && isBridgeCovered,
+    bridge: {
+      requiredOutside,
+      availableOutside,
+      yearsNeeded,
+      yearsShort: Math.max(0, yearsNeeded - (isBridgeCovered ? yearsNeeded : 0)),
+      shortfall: isBridgeCovered ? 0 : shortfall,
+      status: bridgeStatus
+    }
+  };
+
   return {
     canRetireAtTarget,
     targetAge,
     // T-022: Use viable age for backward compatibility, expose theoretical age separately
-    earliestFireAge: viabilityResult.earliestViableAge,
-    earliestTheoreticalAge: viabilityResult.earliestTheoreticalAge,
+    earliestFireAge: dwz.earliestViableAge,
+    earliestTheoreticalAge: dwz.earliestTheoreticalAge,
     shortfallPhase,
+    // T-023: Unified DWZ bundle
+    dwz,
     kpis: {
       // T-022: Expose unified viability data
-      viable: viabilityResult.viable,
-      earliestViableAge: viabilityResult.earliestViableAge,
-      earliestTheoreticalAge: viabilityResult.earliestTheoreticalAge,
+      viable: dwz.isViable,
+      earliestViableAge: dwz.earliestViableAge,
+      earliestTheoreticalAge: dwz.earliestTheoreticalAge,
       limiting: viabilityResult.limiting,
-      // T-022: Unified bridge assessment from viability result
-      bridge: viabilityResult.bridge,
+      // T-023: Use epsilon-clamped bridge data
+      bridge: dwz.bridge,
       
-      sustainableAnnual: solution.sustainableAnnual.toNumber(),
+      sustainableAnnual: dwz.sustainableAnnual,
       bands: ageBandsEnabled ? bands.map(band => ({
         ...band,
         multiplier: typeof band.multiplier === 'number' ? band.multiplier : band.multiplier.toNumber()
@@ -246,12 +282,12 @@ export function decisionFromState(state, rules) {
       // T-017: Binding constraint analysis  
       constraint,
       // T-021: Keep bridgeAssessment for backward compatibility
-      bridgeAssessment: viabilityResult.bridge
+      bridgeAssessment: dwz.bridge
     },
     bequest,
     preservationAge: P,
     constraintAtEarliest: viabilityResult.earliestViableAge ? {
-      bridgeViable: viabilityResult.bridge.status === 'covered',
+      bridgeViable: dwz.bridge.status === 'covered',
       postViable: constraints.postViable
     } : null,
     // T-018: Age-band settings and warnings

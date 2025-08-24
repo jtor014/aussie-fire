@@ -15,11 +15,11 @@ export function GlobalBanner({ decision, lifeExpectancy, bequest = 0 }) {
     return null;
   }
 
-  const { canRetireAtTarget, targetAge, earliestFireAge, kpis: decisionKpis } = decision;
+  const { canRetireAtTarget, targetAge, earliestFireAge, kpis: decisionKpis, dwz } = decision;
   
-  // T-022: Check viability - only show green if truly viable (both horizon + bridge)
-  const isViable = decisionKpis?.viable && earliestFireAge;
-  const bridge = decisionKpis?.bridge || {};
+  // T-023: Use unified DWZ data for consistent viability
+  const isViable = dwz?.isViable || (decisionKpis?.viable && earliestFireAge);
+  const bridge = dwz?.bridge || decisionKpis?.bridge || {};
   
   // Helper function to format money values with thousands separators
   const formatMoney = (amount) => {
