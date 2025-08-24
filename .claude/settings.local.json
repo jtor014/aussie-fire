@@ -35,7 +35,11 @@
       "Bash(gh pr checks:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr comment:*)",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "Bash(git pull:*)",
+      "Bash(npm create:*)",
+      "Bash(npm -w apps/dwz-v2 install zustand zod recharts)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []
