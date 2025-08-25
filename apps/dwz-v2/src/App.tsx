@@ -20,7 +20,6 @@ export default function App() {
   const [sup1, setSup1] = useState(100000);
   const [sup2, setSup2] = useState(100000);
   const [annualSavings, setAnnualSavings] = useState(50000);
-  const [spendingCap, setSpendingCap] = useState<number | null>(null); // optional manual cap
   const [lifeExp, setLifeExp] = useState(90);
   
   // Savings split optimization
@@ -123,7 +122,7 @@ export default function App() {
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    planSpend && planFirstData ? planFirstData.earliestAge : undefined
+    planSpend && planFirstData ? planFirstData.earliestAge ?? undefined : undefined
   );
 
   return (
@@ -159,20 +158,6 @@ export default function App() {
         loading={planFirstLoading}
       />
 
-      <details style={{ marginTop: 16 }}>
-        <summary>Advanced: Spending Cap (Optional)</summary>
-        <div style={{ marginTop: 8 }}>
-          <label>
-            Max spending / yr (leave empty for DWZ optimal): 
-            <input 
-              type="number" 
-              value={spendingCap || ""} 
-              onChange={e => setSpendingCap(e.target.value ? +e.target.value : null)} 
-              placeholder="Unlimited"
-            />
-          </label>
-        </div>
-      </details>
 
       <details style={{ marginTop: 16 }}>
         <summary>Pre-FIRE Savings Split (Super vs Outside)</summary>
@@ -287,11 +272,6 @@ export default function App() {
               </div>
             )}
             
-            {spendingCap && spendingCap < data.sustainableAnnual && (
-              <div style={{ color: "#d4a853", marginTop: 4 }}>
-                🟡 Under-spending: Capped at ${spendingCap.toLocaleString()}/yr (tail will have surplus)
-              </div>
-            )}
           </div>
 
           <WealthChart path={data.path} lifeExp={household.lifeExp} />
