@@ -1,13 +1,19 @@
 import { findEarliestViable } from '../solver';
 import type { EarliestForPlanResult, Inputs } from '../solver';
 
-export function findEarliestAgeForPlan(base: Inputs, plan: number): EarliestForPlanResult {
+export function findEarliestAgeForPlan(
+  base: Inputs, 
+  plan: number, 
+  options: { minStep?: number; hiAgeHint?: number } = {}
+): EarliestForPlanResult {
   if (!Number.isFinite(plan) || plan <= 0) {
     return { plan, earliestAge: null, evaluations: 0 };
   }
   
   const minAgeNow = base.currentAge + 1;
-  const maxAge = Math.max(minAgeNow, base.lifeExp - 1);
+  // Use optional upper bound hint to shrink the search window
+  const maxAgeDefault = Math.max(minAgeNow, base.lifeExp - 1);
+  const maxAge = Math.max(minAgeNow, Math.min(options.hiAgeHint ?? maxAgeDefault, maxAgeDefault));
   let lo = Math.floor(minAgeNow);
   let hi = Math.floor(maxAge);
   let evals = 0;
