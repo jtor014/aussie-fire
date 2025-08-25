@@ -5,8 +5,9 @@ import type { SavingsSplitForPlanResult } from "dwz-core";
 export function useSavingsSplitForPlan(
   h: Household, 
   a: Assumptions,
-  policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number },
+  policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; outsideTaxRate?: number; maxPct?: number },
   plan: number | null,
+  opts: { gridPoints?: number; refineIters?: number; window?: number; ageToleranceYears?: number; preferSuperTieBreak?: boolean } = {},
   enabled: boolean = true
 ) {
   const [data, setData] = useState<SavingsSplitForPlanResult | null>(null);
@@ -39,10 +40,11 @@ export function useSavingsSplitForPlan(
       household: h, 
       assumptions: a,
       plan,
-      policy
+      policy,
+      opts
     });
     return () => workerRef.current?.removeEventListener("message", onMsg);
-  }, [JSON.stringify(h), JSON.stringify(a), JSON.stringify(policy), plan, enabled]);
+  }, [JSON.stringify(h), JSON.stringify(a), JSON.stringify(policy), plan, JSON.stringify(opts), enabled]);
 
   return { data, loading };
 }
