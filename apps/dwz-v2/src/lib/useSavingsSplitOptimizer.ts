@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import type { DecisionDwz, Household, Assumptions } from "dwz-core";
+import type { Household, Assumptions, SavingsSplitResult } from "dwz-core";
 
-export function useDecision(h: Household, a: Assumptions) {
-  const [data, setData] = useState<DecisionDwz | null>(null);
+interface OptimizePolicy {
+  capPerPerson: number;
+  eligiblePeople: number;
+  contribTaxRate?: number;
+  maxPct?: number;
+}
+
+export function useSavingsSplitOptimizer(
+  h: Household, 
+  a: Assumptions, 
+  policy: OptimizePolicy,
+  enabled: boolean = true
+) {
+  const [data, setData] = useState<SavingsSplitResult | null>(null);
   const [loading, setLoading] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const counter = useRef(0);
@@ -13,7 +25,8 @@ export function useDecision(h: Household, a: Assumptions) {
   }, []);
 
   useEffect(() => {
-    if (!workerRef.current) return;
+    if (!workerRef.current || !enabled || !h.annualSavings) return;
+    
     setLoading(true);
     const id = ++counter.current;
     const onMsg = (e: MessageEvent) => {
@@ -22,9 +35,15 @@ export function useDecision(h: Household, a: Assumptions) {
       e.data.ok ? setData(e.data.result) : console.error(e.data.error);
     };
     workerRef.current.addEventListener("message", onMsg);
-    workerRef.current.postMessage({ id, type: 'COMPUTE_DECISION', household: h, assumptions: a });
+    workerRef.current.postMessage({ 
+      id, 
+      type: 'OPTIMIZE_SAVINGS_SPLIT', 
+      household: h, 
+      assumptions: a, 
+      policy 
+    });
     return () => workerRef.current?.removeEventListener("message", onMsg);
-  }, [JSON.stringify(h), JSON.stringify(a)]); // simple, stable
+  }, [JSON.stringify(h), JSON.stringify(a), JSON.stringify(policy), enabled]);
 
   return { data, loading };
 }

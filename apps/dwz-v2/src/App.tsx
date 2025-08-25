@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { type Household, type Assumptions } from "dwz-core";
 import { useDecision } from "./lib/useDecision";
+import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
 import WealthChart from "./components/WealthChart";
+import SensitivityChart from "./components/SensitivityChart";
 
 export default function App() {
   // Couples-first defaults
@@ -16,14 +18,12 @@ export default function App() {
   const [annualSavings, setAnnualSavings] = useState(50000);
   const [spendingCap, setSpendingCap] = useState<number | null>(null); // optional manual cap
   const [lifeExp, setLifeExp] = useState(90);
-
-  const household = useMemo<Household>(() => ({
-    p1: { age: p1Age, income: income1, outside: out1, superBal: sup1, preserveAge: 60, superPrem: 0 },
-    p2: { age: p2Age, income: income2, outside: out2, superBal: sup2, preserveAge: 60, superPrem: 0 },
-    targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
-    annualSavings,
-    lifeExp
-  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, annualSavings, lifeExp]);
+  
+  // Savings split optimization
+  const [autoOptimize, setAutoOptimize] = useState(true);
+  const [manualSplitPct, setManualSplitPct] = useState(0.5);
+  const [capPerPerson, setCapPerPerson] = useState(30000);
+  const [eligiblePeople, setEligiblePeople] = useState(2);
 
   const assumptions = useMemo<Assumptions>(() => ({
     realReturn: 0.059,
@@ -35,6 +35,49 @@ export default function App() {
       { from: 75, to: 200, m: 0.85 }
     ]
   }), []);
+
+  const optimizerPolicy = useMemo(() => ({
+    capPerPerson,
+    eligiblePeople,
+    contribTaxRate: 0.15,
+    maxPct: 1.0
+  }), [capPerPerson, eligiblePeople]);
+
+  // Create a basic household for the optimizer (without savings split)
+  const baseHousehold = useMemo<Household>(() => ({
+    p1: { age: p1Age, income: income1, outside: out1, superBal: sup1, preserveAge: 60, superPrem: 0 },
+    p2: { age: p2Age, income: income2, outside: out2, superBal: sup2, preserveAge: 60, superPrem: 0 },
+    targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
+    annualSavings,
+    lifeExp
+  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, annualSavings, lifeExp]);
+  
+  const { data: optimizerData, loading: optimizerLoading } = useSavingsSplitOptimizer(
+    baseHousehold, 
+    assumptions, 
+    optimizerPolicy, 
+    autoOptimize && annualSavings > 0
+  );
+
+  const household = useMemo<Household>(() => {
+    // Determine effective split percentage
+    const effectiveSplitPct = autoOptimize && optimizerData ? 
+      optimizerData.recommendedPct : 
+      manualSplitPct;
+    
+    // Include savings split in household if we have annual savings
+    const preFireSavingsSplit = annualSavings > 0 ? {
+      toSuperPct: effectiveSplitPct,
+      capPerPerson,
+      eligiblePeople,
+      contribTaxRate: 0.15
+    } : undefined;
+    
+    return {
+      ...baseHousehold,
+      preFireSavingsSplit
+    };
+  }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings]);
 
   const { data, loading } = useDecision(household, assumptions);
 
@@ -79,6 +122,76 @@ export default function App() {
         </div>
       </details>
 
+      <details style={{ marginTop: 16 }}>
+        <summary>Pre-FIRE Savings Split (Super vs Outside)</summary>
+        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <label>
+              <input 
+                type="checkbox" 
+                checked={autoOptimize} 
+                onChange={e => setAutoOptimize(e.target.checked)}
+              />
+              {' '}Auto-optimize for earliest retirement
+            </label>
+            {!autoOptimize && (
+              <div style={{ marginTop: 8 }}>
+                <label>Manual split to super: 
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="100" 
+                    step="5"
+                    value={Math.round(manualSplitPct * 100)} 
+                    onChange={e => setManualSplitPct(+e.target.value / 100)}
+                  />%
+                </label>
+              </div>
+            )}
+          </div>
+          <div>
+            <label>Concessional cap per person: 
+              <input 
+                type="number" 
+                value={capPerPerson} 
+                onChange={e => setCapPerPerson(+e.target.value)}
+              />
+            </label><br/>
+            <label>Eligible people: 
+              <select value={eligiblePeople} onChange={e => setEligiblePeople(+e.target.value)}>
+                <option value={1}>1 (single)</option>
+                <option value={2}>2 (couple)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        
+        {optimizerLoading && <p style={{ marginTop: 8, color: "#666" }}>Optimizing savings split...</p>}
+        {optimizerData && autoOptimize && (
+          <div style={{ marginTop: 12, padding: 8, background: "#f0f8ff", borderRadius: 4 }}>
+            <strong>Optimizer Result:</strong> {Math.round(optimizerData.recommendedPct * 100)}% to super 
+            → retire at age {optimizerData.earliestAge} (vs manual split)
+            <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+              Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
+              Evaluations: {optimizerData.evals}
+            </div>
+            
+            <details style={{ marginTop: 8 }}>
+              <summary style={{ cursor: 'pointer', fontSize: 14 }}>Sensitivity Analysis</summary>
+              <div style={{ marginTop: 8 }}>
+                <SensitivityChart 
+                  sensitivity={optimizerData.sensitivity} 
+                  recommendedPct={optimizerData.recommendedPct}
+                />
+                <p style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                  Red dot shows optimal split. Chart shows how retirement age varies with super allocation percentage.
+                </p>
+              </div>
+            </details>
+          </div>
+        )}
+      </details>
+
       <hr style={{ margin: "24px 0" }} />
 
       {loading && <p>Calculating…</p>}
@@ -88,6 +201,12 @@ export default function App() {
             <strong>You can retire at age {data.earliest.viable}</strong> with DWZ.
             <div>Sustainable spending (DWZ): <strong>${Math.round(data.sustainableAnnual).toLocaleString()}/yr</strong></div>
             <div>Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need ${Math.round(data.bridge.need).toLocaleString()} PV, have ${Math.round(data.bridge.have).toLocaleString()} for {data.bridge.years} years</div>
+            {household.preFireSavingsSplit && (
+              <div>
+                Savings split: <strong>{Math.round(household.preFireSavingsSplit.toSuperPct * 100)}%</strong> to super 
+                ({autoOptimize ? "auto-optimized" : "manual"})
+              </div>
+            )}
             {spendingCap && spendingCap < data.sustainableAnnual && (
               <div style={{ color: "#d4a853", marginTop: 4 }}>
                 🟡 Under-spending: Capped at ${spendingCap.toLocaleString()}/yr (tail will have surplus)
