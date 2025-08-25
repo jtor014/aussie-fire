@@ -79,4 +79,12 @@ export interface PreFireSavingsSplit {
   capPerPerson: number;               // concessional cap per eligible person
   eligiblePeople: number;           // 1 or 2 typically
   contribTaxRate: number;             // usually 0.15
+  /** Marginal tax rate on amounts saved outside (0..1). Used in 'grossDeferral' mode. */
+  outsideTaxRate?: number;
+  /**
+   * How to interpret annualSavings for accumulation:
+   * - 'grossDeferral': annualSavings is pre-tax capacity; outside net = gross*(1 - outsideTaxRate), super net = gross*(1 - contribTaxRate).
+   * - 'netFixed' (default/back-compat): treat annualSavings as already-net; outside receives residual without extra tax.
+   */
+  mode?: 'grossDeferral' | 'netFixed';
 }
