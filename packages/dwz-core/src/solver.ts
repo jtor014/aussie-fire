@@ -79,16 +79,19 @@ export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverP
   let sup = inp.super0;
 
   while (age < retireAge) {
-    // Apply savings split if configured, otherwise all to outside (backward compatible)
+    // Pre-FIRE accumulation (before fees/returns): split annualSavings into outside vs super if configured
     const totalSavings = inp.annualSavings;
     if (totalSavings > 0) {
       const split = inp.preFireSavingsSplit;
       if (split) {
         const pct = Math.min(1, Math.max(0, split.toSuperPct ?? 0));
         const desiredSuperGross = totalSavings * pct;
-        const capTotal = Math.max(0, split.capPerPerson * split.eligiblePeople);
+        // Clamp eligiblePeople to reasonable household size (0-2)
+        const eligible = Math.min(2, Math.max(0, split.eligiblePeople || 0));
+        const capTotal = Math.max(0, (split.capPerPerson || 0) * eligible);
         const superGross = Math.min(desiredSuperGross, capTotal);
-        const superNet = superGross * (1 - (split.contribTaxRate ?? 0.15));
+        // Round to cents to avoid dust drift in long runs
+        const superNet = Math.round((superGross * (1 - (split.contribTaxRate ?? 0.15))) * 100) / 100;
         const outsideNet = totalSavings - superGross;
         
         outside += outsideNet;
