@@ -58,6 +58,7 @@ export default function WealthChart({ path, lifeExp }: { path: PathPoint[]; life
             stroke="#8884d8"
             strokeWidth={1.5}
             connectNulls={false}
+            isAnimationActive={false}
           />
           <Line 
             type="monotone" 
@@ -66,6 +67,7 @@ export default function WealthChart({ path, lifeExp }: { path: PathPoint[]; life
             stroke="#82ca9d"
             strokeWidth={1.5}
             connectNulls={false}
+            isAnimationActive={false}
           />
           <Line 
             type="monotone" 
@@ -74,6 +76,7 @@ export default function WealthChart({ path, lifeExp }: { path: PathPoint[]; life
             strokeWidth={2}
             stroke="#ff7c7c"
             connectNulls={false}
+            isAnimationActive={false}
           />
           
           <ReferenceLine x={lifeExp} strokeDasharray="4 4" />
