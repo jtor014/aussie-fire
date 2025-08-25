@@ -1,7 +1,8 @@
 import { Assumptions, Band, Bridge, DecisionDwz, Household, PathPoint, LifecyclePhase } from "./types.js";
 export * from "./types.js";
 export * from "./solver.js";
-export { optimizeSavingsSplit } from "./optimizer/savingsSplit.js";
+export { optimizeSavingsSplit, optimizeSavingsSplitForPlan } from "./optimizer/savingsSplit.js";
+export type { SavingsSplitForPlanResult } from "./optimizer/savingsSplit.js";
 export { findEarliestAgeForPlan } from "./planning/earliestForPlan.js";
 
 const EPS = 1;

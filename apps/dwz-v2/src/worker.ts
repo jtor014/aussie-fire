@@ -1,11 +1,12 @@
 /// <reference lib="webworker" />
-import { findEarliestViable, optimizeSavingsSplit, findEarliestAgeForPlan } from "dwz-core";
+import { findEarliestViable, optimizeSavingsSplit, findEarliestAgeForPlan, optimizeSavingsSplitForPlan } from "dwz-core";
 import type { Inputs, Bands, Household, Assumptions } from "dwz-core";
 
 type WorkerMessage = 
   | { id: number; type: 'COMPUTE_DECISION'; household: Household; assumptions: Assumptions; forceRetireAge?: number }
   | { id: number; type: 'OPTIMIZE_SAVINGS_SPLIT'; household: Household; assumptions: Assumptions; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } }
-  | { id: number; type: 'EARLIEST_AGE_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number };
+  | { id: number; type: 'EARLIEST_AGE_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number }
+  | { id: number; type: 'OPTIMIZE_SPLIT_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } };
 
 self.addEventListener("message", (e: MessageEvent) => {
   const msg = e.data as WorkerMessage;
@@ -17,6 +18,8 @@ self.addEventListener("message", (e: MessageEvent) => {
       handleOptimizeSavingsSplit(msg);
     } else if (msg.type === 'EARLIEST_AGE_FOR_PLAN') {
       handleEarliestAgeForPlan(msg);
+    } else if (msg.type === 'OPTIMIZE_SPLIT_FOR_PLAN') {
+      handleOptimizeSplitForPlan(msg);
     }
   } catch (err: any) {
     (self as any).postMessage({ id: msg.id, ok: false, error: String(err?.message || err) });
@@ -93,6 +96,13 @@ function handleOptimizeSavingsSplit(msg: Extract<WorkerMessage, { type: 'OPTIMIZ
 function handleEarliestAgeForPlan(msg: Extract<WorkerMessage, { type: 'EARLIEST_AGE_FOR_PLAN' }>) {
   const baseInput = convertToSolverInput(msg.household, msg.assumptions);
   const result = findEarliestAgeForPlan(baseInput, msg.plan);
+  
+  (self as any).postMessage({ id: msg.id, ok: true, result });
+}
+
+function handleOptimizeSplitForPlan(msg: Extract<WorkerMessage, { type: 'OPTIMIZE_SPLIT_FOR_PLAN' }>) {
+  const baseInput = convertToSolverInput(msg.household, msg.assumptions);
+  const result = optimizeSavingsSplitForPlan(baseInput, msg.plan, msg.policy);
   
   (self as any).postMessage({ id: msg.id, ok: true, result });
 }
