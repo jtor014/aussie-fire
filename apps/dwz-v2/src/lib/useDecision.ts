@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DecisionDwz, Household, Assumptions } from "dwz-core";
 
-export function useDecision(h: Household, a: Assumptions) {
+export function useDecision(h: Household, a: Assumptions, forceRetireAge?: number) {
   const [data, setData] = useState<DecisionDwz | null>(null);
   const [loading, setLoading] = useState(false);
   const workerRef = useRef<Worker | null>(null);
@@ -22,9 +22,15 @@ export function useDecision(h: Household, a: Assumptions) {
       e.data.ok ? setData(e.data.result) : console.error(e.data.error);
     };
     workerRef.current.addEventListener("message", onMsg);
-    workerRef.current.postMessage({ id, type: 'COMPUTE_DECISION', household: h, assumptions: a });
+    workerRef.current.postMessage({ 
+      id, 
+      type: 'COMPUTE_DECISION', 
+      household: h, 
+      assumptions: a,
+      forceRetireAge 
+    });
     return () => workerRef.current?.removeEventListener("message", onMsg);
-  }, [JSON.stringify(h), JSON.stringify(a)]); // simple, stable
+  }, [JSON.stringify(h), JSON.stringify(a), forceRetireAge]); // simple, stable
 
   return { data, loading };
 }
