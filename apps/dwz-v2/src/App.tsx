@@ -28,6 +28,7 @@ export default function App() {
   const [manualSplitPct, setManualSplitPct] = useState(0.5);
   const [capPerPerson, setCapPerPerson] = useState(30000);
   const [eligiblePeople, setEligiblePeople] = useState(2);
+  const [outsideTaxRate, setOutsideTaxRate] = useState(0.32); // default 32% including Medicare
   
   // Plan-first solver with default
   const [planSpend, setPlanSpend] = useState<number | null>(null);
@@ -60,8 +61,9 @@ export default function App() {
     capPerPerson,
     eligiblePeople,
     contribTaxRate: 0.15,
+    outsideTaxRate: Math.max(0, Math.min(0.65, outsideTaxRate)), // clamp 0..65%
     maxPct: 1.0
-  }), [capPerPerson, eligiblePeople]);
+  }), [capPerPerson, eligiblePeople, outsideTaxRate]);
 
   // Create a basic household for the optimizer (without savings split)
   const baseHousehold = useMemo<Household>(() => ({
@@ -110,7 +112,9 @@ export default function App() {
       toSuperPct: effectiveSplitPct,
       capPerPerson,
       eligiblePeople,
-      contribTaxRate: 0.15
+      contribTaxRate: 0.15,
+      outsideTaxRate: Math.max(0, Math.min(0.65, outsideTaxRate)),
+      mode: autoOptimize ? 'grossDeferral' as const : 'netFixed' as const
     } : undefined;
     
     return {
@@ -227,6 +231,28 @@ export default function App() {
                 onChange={e => setAutoOptimize(e.target.checked)}
               />
               {' '}Auto-optimize {planSpend ? `for earliest age at $${planSpend.toLocaleString()}/yr` : 'for earliest retirement'}
+            </label>
+            <div style={{ fontSize: 12, color: "#666", marginTop: 4, marginBottom: 8 }}>
+              This optimizer treats your savings as <strong>pre-tax salary you can direct</strong>. Outside is taxed at your marginal rate; super is taxed at 15% (concessional).
+            </div>
+            <label style={{ display: 'block', marginTop: 8 }}>
+              Marginal tax rate on outside savings (% incl. Medicare):
+              <input 
+                type="number" 
+                min="0" 
+                max="65" 
+                step="0.5"
+                value={(outsideTaxRate * 100).toFixed(1)} 
+                onChange={e => setOutsideTaxRate(Math.max(0, Math.min(0.65, (+e.target.value || 0) / 100)))}
+                style={{
+                  width: '80px',
+                  padding: '4px 6px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 4,
+                  fontSize: 14,
+                  marginLeft: 8
+                }}
+              />%
             </label>
             {!autoOptimize && (
               <div style={{ marginTop: 8 }}>

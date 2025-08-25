@@ -28,12 +28,7 @@ export type Inputs = {
   retireAge?: number;
 
   // Optional pre-FIRE savings split policy
-  preFireSavingsSplit?: {
-    toSuperPct: number;         // 0..1 desired split to super (gross, before 15% contrib tax)
-    capPerPerson: number;       // concessional cap per eligible person
-    eligiblePeople: number;     // 1 or 2 typically
-    contribTaxRate: number;     // usually 0.15
-  };
+  preFireSavingsSplit?: import('./types.js').PreFireSavingsSplit;
 };
 
 export type SolverPathPoint = {
@@ -100,9 +95,23 @@ export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverP
         const eligible = Math.min(2, Math.max(0, split.eligiblePeople || 0));
         const capTotal = Math.max(0, (split.capPerPerson || 0) * eligible);
         const superGross = Math.min(desiredSuperGross, capTotal);
-        // Round to cents to avoid dust drift in long runs
-        const superNet = Math.round((superGross * (1 - (split.contribTaxRate ?? 0.15))) * 100) / 100;
-        const outsideNet = totalSavings - superGross;
+        
+        // Apply tax-aware mode
+        const mode = split.mode ?? 'netFixed';
+        const contribTax = Math.min(1, Math.max(0, split.contribTaxRate ?? 0.15));
+        const outsideTax = Math.min(1, Math.max(0, split.outsideTaxRate ?? 0));
+        
+        let superNet: number, outsideNet: number;
+        if (mode === 'grossDeferral') {
+          // Treat 'totalSavings' as gross salary you can direct inside/outside
+          const outsideGross = Math.max(0, totalSavings - superGross);
+          superNet   = Math.round((superGross   * (1 - contribTax)) * 100) / 100;
+          outsideNet = Math.round((outsideGross * (1 - outsideTax)) * 100) / 100;
+        } else {
+          // Back-compat: 'totalSavings' is already net cash
+          superNet = Math.round((superGross * (1 - contribTax)) * 100) / 100;
+          outsideNet = totalSavings - superGross;
+        }
         
         outside += outsideNet;
         sup += superNet;
