@@ -15,27 +15,31 @@ export default function PlanSpendInput({ planSpend, onPlanSpendChange, result, l
   };
 
   return (
-    <details style={{ marginTop: 16 }}>
-      <summary>Plan-First: Set Your Target Spending</summary>
-      <div style={{ marginTop: 8, padding: 8, background: "#f8f9ff", borderRadius: 4 }}>
+    <section style={{ marginTop: 16 }}>
+      <div style={{ padding: 12, background: "#f8f9ff", borderRadius: 8, border: "1px solid #e0e7ff" }}>
         <label style={{ display: 'block', marginBottom: 8 }}>
-          <strong>Annual spending target (today's dollars)</strong>
+          <strong style={{ fontSize: 16 }}>Annual spending target (today's dollars)</strong>
           <input 
             type="text" 
             inputMode="numeric" 
-            placeholder="e.g. 100000" 
+            placeholder="e.g. 95000" 
             value={planSpend ?? ''} 
             onChange={onChange}
             style={{ 
               width: '100%', 
               border: '1px solid #ccc', 
-              borderRadius: 4, 
-              padding: '6px 8px', 
-              marginTop: 4,
-              fontSize: 14 
+              borderRadius: 6, 
+              padding: '10px 12px', 
+              marginTop: 6,
+              fontSize: 16,
+              fontWeight: 500
             }}
           />
         </label>
+        
+        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, marginBottom: 8 }}>
+          Default is pre-filled based on your household (couples: $95,000). Adjust to your lifestyle.
+        </div>
         
         {loading && (
           <p style={{ fontSize: 12, color: "#666", margin: '8px 0' }}>
@@ -62,18 +66,9 @@ export default function PlanSpendInput({ planSpend, onPlanSpendChange, result, l
                 </div>
               </div>
             )}
-            <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
-              Analysis completed in {result.evaluations} evaluations
-            </div>
           </div>
         )}
-        
-        <div style={{ fontSize: 12, color: '#666', marginTop: 8, lineHeight: 1.4 }}>
-          <strong>How it works:</strong> Enter your target annual spending. We'll find the earliest age 
-          where you can retire and sustain that spending level while still depleting to ~$0 at life expectancy 
-          (true DWZ methodology).
-        </div>
       </div>
-    </details>
+    </section>
   );
 }
