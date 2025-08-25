@@ -19,7 +19,12 @@ export function useDecision(h: Household, a: Assumptions, forceRetireAge?: numbe
     const onMsg = (e: MessageEvent) => {
       if (e.data.id !== id) return;
       setLoading(false);
-      e.data.ok ? setData(e.data.result) : console.error(e.data.error);
+      if (e.data.ok) {
+        setData(e.data.result);
+      } else {
+        console.error('useDecision error:', e.data.error);
+        setData(null);
+      }
     };
     workerRef.current.addEventListener("message", onMsg);
     workerRef.current.postMessage({ 

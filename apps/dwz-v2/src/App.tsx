@@ -109,7 +109,7 @@ export default function App() {
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    planFirstData?.earliestAge ?? undefined
+    planSpend && planFirstData ? planFirstData.earliestAge : undefined
   );
 
   return (
