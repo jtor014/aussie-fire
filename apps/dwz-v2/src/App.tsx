@@ -7,6 +7,7 @@ import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
 import PlanSpendInput from "./components/PlanSpendInput";
+import PersonCard from "./components/PersonCard";
 import { COUPLES_PLAN_DEFAULT, SINGLE_PLAN_DEFAULT } from "./constants/defaults";
 
 export default function App() {
@@ -129,26 +130,82 @@ export default function App() {
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <h1>Australian FIRE Calculator — DWZ v2 (Couples-first)</h1>
 
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
-          <h3>You</h3>
-          <label>Age <input type="number" value={p1Age} onChange={e=>setP1Age(+e.target.value)} /></label><br/>
-          <label>Income <input type="number" value={income1} onChange={e=>setIncome1(+e.target.value)} /></label><br/>
-          <label>Outside <input type="number" value={out1} onChange={e=>setOut1(+e.target.value)} /></label><br/>
-          <label>Super <input type="number" value={sup1} onChange={e=>setSup1(+e.target.value)} /></label>
-        </div>
-        <div>
-          <h3>Partner</h3>
-          <label>Age <input type="number" value={p2Age} onChange={e=>setP2Age(+e.target.value)} /></label><br/>
-          <label>Income <input type="number" value={income2} onChange={e=>setIncome2(+e.target.value)} /></label><br/>
-          <label>Outside <input type="number" value={out2} onChange={e=>setOut2(+e.target.value)} /></label><br/>
-          <label>Super <input type="number" value={sup2} onChange={e=>setSup2(+e.target.value)} /></label>
-        </div>
+      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 24 }}>
+        <PersonCard
+          title="You"
+          age={p1Age}
+          income={income1}
+          outside={out1}
+          super={sup1}
+          onAgeChange={setP1Age}
+          onIncomeChange={setIncome1}
+          onOutsideChange={setOut1}
+          onSuperChange={setSup1}
+        />
+        <PersonCard
+          title="Partner"
+          age={p2Age}
+          income={income2}
+          outside={out2}
+          super={sup2}
+          onAgeChange={setP2Age}
+          onIncomeChange={setIncome2}
+          onOutsideChange={setOut2}
+          onSuperChange={setSup2}
+        />
       </section>
 
-      <section style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <label>Savings / yr (combined) <input type="number" value={annualSavings} onChange={e=>setAnnualSavings(+e.target.value)} /></label>
-        <label>Life expectancy <input type="number" value={lifeExp} onChange={e=>setLifeExp(+e.target.value)} /></label>
+      <section style={{ 
+        marginTop: 20, 
+        display: "grid", 
+        gridTemplateColumns: "1fr 1fr", 
+        gap: 20,
+        padding: '16px 0'
+      }}>
+        <label style={{
+          display: 'block',
+          fontSize: 14,
+          fontWeight: 500,
+          color: '#374151'
+        }}>
+          Savings / yr (combined)
+          <input 
+            type="number" 
+            value={annualSavings} 
+            onChange={e=>setAnnualSavings(+e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: 6,
+              fontSize: 14,
+              marginTop: 4,
+              fontFamily: 'inherit'
+            }}
+          />
+        </label>
+        <label style={{
+          display: 'block',
+          fontSize: 14,
+          fontWeight: 500,
+          color: '#374151'
+        }}>
+          Life expectancy
+          <input 
+            type="number" 
+            value={lifeExp} 
+            onChange={e=>setLifeExp(+e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: '1px solid #d1d5db',
+              borderRadius: 6,
+              fontSize: 14,
+              marginTop: 4,
+              fontFamily: 'inherit'
+            }}
+          />
+        </label>
       </section>
 
       <PlanSpendInput 
