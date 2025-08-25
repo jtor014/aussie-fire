@@ -1,4 +1,4 @@
-import { Inputs, findEarliestViable } from '../solver';
+import { Inputs, findEarliestViable, accumulateUntil } from '../solver';
 import { SavingsSplitResult, SavingsSplitConstraints, SavingsSplitSensitivityPoint } from '../types';
 import { findEarliestAgeForPlan } from '../planning/earliestForPlan';
 
@@ -127,14 +127,16 @@ export interface SavingsSplitForPlanResult extends SavingsSplitResult {
 export function optimizeSavingsSplitForPlan(
   baseInput: Inputs,
   plan: number,
-  policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number },
-  opts: OptimizeOptions = {}
+  policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; outsideTaxRate?: number; maxPct?: number },
+  opts: OptimizeOptions & { ageToleranceYears?: number; preferSuperTieBreak?: boolean } = {}
 ): SavingsSplitForPlanResult {
   const gridPoints = Math.max(5, opts.gridPoints ?? 19);
   const refineIters = Math.max(0, opts.refineIters ?? 2);
   const window = Math.max(0.02, opts.window ?? 0.15);
   const maxPct = Math.min(1, Math.max(0, policy.maxPct ?? 1));
   const contribTaxRate = policy.contribTaxRate ?? 0.15;
+  const tol = Math.max(0, opts.ageToleranceYears ?? 0);      // years we allow as same age
+  const tieBreak = !!opts.preferSuperTieBreak;               // enable secondary objective
 
   type PlanEval = { earliestAge: number | null; atAgeSpend?: number; constraints: SavingsSplitConstraints };
   const memo = new Map<number, PlanEval>();
@@ -257,13 +259,41 @@ export function optimizeSavingsSplitForPlan(
     }
   }
 
+  // --- Tie-break among solutions within tolerance of best earliestAge ---
+  let chosenPct = bestPct;
+  if (tieBreak && Number.isFinite(bestEval.earliestAge!)) {
+    const targetAge = bestEval.earliestAge as number;
+    // Collect candidate pcts already evaluated within tolerance
+    const cands: number[] = [];
+    memo.forEach((v, k) => {
+      if (v.earliestAge != null && (v.earliestAge as number) <= targetAge + tol + 1e-9) cands.push(k);
+    });
+    // For each candidate, evaluate total wealth at the start of retirement at targetAge
+    let bestWealth = -Infinity;
+    for (const p of cands) {
+      const at = accumulateUntil({
+        ...baseInput,
+        preFireSavingsSplit: {
+          toSuperPct: p,
+          capPerPerson: policy.capPerPerson,
+          eligiblePeople: policy.eligiblePeople,
+          contribTaxRate,
+          outsideTaxRate: policy.outsideTaxRate,
+          mode: 'grossDeferral'
+        }
+      }, targetAge);
+      const w = at.outside + at.super;
+      if (w > bestWealth) { bestWealth = w; chosenPct = p; }
+    }
+  }
+
   // Sensitivity analysis - ensure we get 5 distinct points
   const sensPoints = [
-    bestPct - 0.10,
-    bestPct - 0.05,
-    bestPct,
-    bestPct + 0.05,
-    bestPct + 0.10
+    chosenPct - 0.10,
+    chosenPct - 0.05,
+    chosenPct,
+    chosenPct + 0.05,
+    chosenPct + 0.10
   ].map(p => clamp(p, 0, maxPct));
   
   // Deduplicate while preserving order preference
@@ -293,12 +323,12 @@ export function optimizeSavingsSplitForPlan(
     earliestAge: evalAt(p).earliestAge ?? Infinity
   }));
 
-  const capBindingAtOpt = (baseInput.annualSavings * bestPct) > (policy.capPerPerson * policy.eligiblePeople + 1e-9);
+  const capBindingAtOpt = (baseInput.annualSavings * chosenPct) > (policy.capPerPerson * policy.eligiblePeople + 1e-9);
 
   return {
     objective: 'earliestAgeForPlan',
     plan,
-    recommendedPct: bestPct,
+    recommendedPct: chosenPct,
     earliestAge: bestEval.earliestAge ?? Infinity,
     dwzSpend: bestEval.atAgeSpend ?? 0,
     sensitivity,
