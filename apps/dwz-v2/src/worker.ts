@@ -3,7 +3,7 @@ import { findEarliestViable, optimizeSavingsSplit, findEarliestAgeForPlan } from
 import type { Inputs, Bands, Household, Assumptions } from "dwz-core";
 
 type WorkerMessage = 
-  | { id: number; type: 'COMPUTE_DECISION'; household: Household; assumptions: Assumptions }
+  | { id: number; type: 'COMPUTE_DECISION'; household: Household; assumptions: Assumptions; forceRetireAge?: number }
   | { id: number; type: 'OPTIMIZE_SAVINGS_SPLIT'; household: Household; assumptions: Assumptions; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } }
   | { id: number; type: 'EARLIEST_AGE_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number };
 
@@ -51,7 +51,9 @@ function convertToSolverInput(household: Household, assumptions: Assumptions): I
 
 function handleComputeDecision(msg: Extract<WorkerMessage, { type: 'COMPUTE_DECISION' }>) {
   const inp = convertToSolverInput(msg.household, msg.assumptions);
-  const solverResult = findEarliestViable(inp);
+  // Apply forced retirement age if provided
+  const inputWithRetireAge = msg.forceRetireAge ? { ...inp, retireAge: msg.forceRetireAge } : inp;
+  const solverResult = findEarliestViable(inputWithRetireAge);
   
   if (solverResult) {
     // Convert back to expected format

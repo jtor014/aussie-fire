@@ -91,7 +91,12 @@ export default function App() {
     };
   }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings]);
 
-  const { data, loading } = useDecision(household, assumptions);
+  // Pass the earliest age from plan-first solver to ensure consistency
+  const { data, loading } = useDecision(
+    household, 
+    assumptions, 
+    planFirstData?.earliestAge ?? undefined
+  );
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
@@ -213,38 +218,56 @@ export default function App() {
 
       <hr style={{ margin: "24px 0" }} />
 
-      {loading && <p>Calculating…</p>}
-      {data && (
+      {/* Plan-first mandatory: Show empty state when no plan */}
+      {!planSpend && (
+        <div style={{ padding: 16, borderRadius: 8, background: "#fef3c7", border: "1px solid #fbbf24", marginBottom: 12 }}>
+          <strong style={{ fontSize: 18 }}>Enter your annual plan spend to begin</strong>
+          <p style={{ marginTop: 8, marginBottom: 0, color: "#78716c" }}>
+            This calculator finds the earliest age you can retire and sustain that spending 
+            while still depleting to ~$0 at life expectancy (true DWZ methodology).
+          </p>
+        </div>
+      )}
+
+      {/* Show not achievable message when plan is set but not viable */}
+      {planSpend && planFirstData && planFirstData.earliestAge === null && (
+        <div style={{ padding: 16, borderRadius: 8, background: "#fee2e2", border: "1px solid #f87171", marginBottom: 12 }}>
+          <strong style={{ fontSize: 18 }}>
+            Your plan ${planSpend.toLocaleString()}/yr is not achievable under current assumptions
+          </strong>
+          <p style={{ marginTop: 8, marginBottom: 0, color: "#78716c" }}>
+            Try reducing expenses, increasing savings, or adjusting other parameters.
+          </p>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {(loading || (planSpend && planFirstLoading)) && <p>Calculating…</p>}
+
+      {/* Show results only when plan is achievable */}
+      {planSpend && planFirstData && planFirstData.earliestAge !== null && data && (
         <>
           <div style={{ padding: 12, borderRadius: 8, background: "#e8f8ef", marginBottom: 12 }}>
-            {/* Plan-first banner when plan is set and results available */}
-            {planSpend && planFirstData ? (
-              <div>
-                <strong>
-                  {planFirstData.earliestAge !== null
-                    ? `At your plan $${planSpend.toLocaleString()}/yr, earliest viable age is ${planFirstData.earliestAge}.`
-                    : `Your plan $${planSpend.toLocaleString()}/yr is not achievable under current assumptions.`}
-                </strong>
-                {planFirstData.atAgeSpend && (
-                  <div style={{ marginTop: 4 }}>
-                    DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>${Math.round(planFirstData.atAgeSpend).toLocaleString()}/yr</strong>
-                  </div>
-                )}
+            <div>
+              <strong>
+                At your plan $${planSpend.toLocaleString()}/yr, earliest viable age is {planFirstData.earliestAge}.
+              </strong>
+              <div style={{ marginTop: 4 }}>
+                DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>${Math.round(planFirstData.atAgeSpend || data.sustainableAnnual).toLocaleString()}/yr</strong>
               </div>
-            ) : (
-              <div>
-                <strong>You can retire at age {data.earliest.viable}</strong> with DWZ.
-                <div>Sustainable spending (DWZ): <strong>${Math.round(data.sustainableAnnual).toLocaleString()}/yr</strong></div>
-              </div>
-            )}
+            </div>
             
-            <div>Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need ${Math.round(data.bridge.need).toLocaleString()} PV, have ${Math.round(data.bridge.have).toLocaleString()} for {data.bridge.years} years</div>
+            <div style={{ marginTop: 8 }}>
+              Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need ${Math.round(data.bridge.need).toLocaleString()} PV, have ${Math.round(data.bridge.have).toLocaleString()} for {data.bridge.years} years
+            </div>
+            
             {household.preFireSavingsSplit && (
               <div>
                 Savings split: <strong>{Math.round(household.preFireSavingsSplit.toSuperPct * 100)}%</strong> to super 
                 ({autoOptimize ? "auto-optimized" : "manual"})
               </div>
             )}
+            
             {spendingCap && spendingCap < data.sustainableAnnual && (
               <div style={{ color: "#d4a853", marginTop: 4 }}>
                 🟡 Under-spending: Capped at ${spendingCap.toLocaleString()}/yr (tail will have surplus)
