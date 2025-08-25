@@ -18,6 +18,7 @@ export type Household = {
   targetSpend: number;   // real dollars / year
   lifeExp: number;       // age (e.g., 90)
   annualSavings?: number; // simple pre-retirement savings budget (combined household, real $/yr)
+  preFireSavingsSplit?: PreFireSavingsSplit; // optional savings split policy
 };
 
 export type Assumptions = {
@@ -50,3 +51,32 @@ export type DecisionDwz = {
   path: PathPoint[];
   recommendedSplit: { salarySacrifice: number; outside: number; note: string };
 };
+
+// Optimizer types
+export interface SavingsSplitConstraints {
+  capPerPerson: number;
+  eligiblePeople: number;
+  capTotal: number;
+  contribTaxRate: number;
+}
+
+export interface SavingsSplitSensitivityPoint {
+  pct: number;
+  earliestAge: number;
+}
+
+export interface SavingsSplitResult {
+  recommendedPct: number;               // in [0,1]
+  earliestAge: number;
+  dwzSpend: number;
+  sensitivity: SavingsSplitSensitivityPoint[];
+  constraints: SavingsSplitConstraints & { capBindingAtOpt: boolean };
+  evals: number;                      // number of solver evaluations
+}
+
+export interface PreFireSavingsSplit {
+  toSuperPct: number;                 // 0..1 desired split to super (gross, before 15% contrib tax)
+  capPerPerson: number;               // concessional cap per eligible person
+  eligiblePeople: number;           // 1 or 2 typically
+  contribTaxRate: number;             // usually 0.15
+}

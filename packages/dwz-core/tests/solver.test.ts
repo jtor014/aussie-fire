@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest';
 import { findEarliestViable, computeBridgePV, solveSBaseForAge, Inputs, Bands } from "../src/solver";
 
 const bands: Bands = [
