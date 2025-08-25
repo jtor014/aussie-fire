@@ -24,6 +24,9 @@ export type Inputs = {
   // bequest target in real dollars (0 for classic DWZ)
   bequest: number;
 
+  // Optional: force retirement to begin when the younger partner reaches this age
+  retireAge?: number;
+
   // Optional pre-FIRE savings split policy
   preFireSavingsSplit?: {
     toSuperPct: number;         // 0..1 desired split to super (gross, before 15% contrib tax)
@@ -53,6 +56,13 @@ export type SolveResult = {
   sBase: number;          // sustainable base spending (real $/yr)
   bridge: BridgeResult;
   path: SolverPathPoint[];
+};
+
+export type EarliestForPlanResult = {
+  plan: number;
+  earliestAge: number | null;   // null if not achievable
+  atAgeSpend?: number;
+  evaluations: number;
 };
 
 export function bandMultiplierAt(age: number, bands: Bands): number {
@@ -199,6 +209,30 @@ export function solveSBaseForAge(inp: Inputs, retireAge: number): { sBase: numbe
 
 /** Earliest viable age: bridge covered using the *solved* schedule. */
 export function findEarliestViable(inp: Inputs): SolveResult | null {
+  // If retireAge is forced, test only that age
+  if (inp.retireAge !== undefined) {
+    const A = inp.retireAge;
+    const acc = accumulateUntil(inp, A);
+    const { sBase, pathRetire } = solveSBaseForAge(inp, A);
+
+    const needPV = computeBridgePV(inp, A, sBase);
+    const have = acc.outside;
+    const covered = have + 1 >= needPV; // $1 epsilon clamp
+
+    if (covered) {
+      // Build full path = accumulation + retirement (phase tags set)
+      const path = [...acc.path, ...pathRetire];
+      return {
+        retireAge: A,
+        sBase,
+        bridge: { years: Math.max(0, Math.min(inp.preserveAge, inp.lifeExp) - A), needPV, have, covered },
+        path
+      };
+    }
+    return null; // Forced age is not viable
+  }
+
+  // Original logic: search for earliest viable age
   const minAge = inp.currentAge + 1;
   const maxAge = Math.max(minAge, inp.lifeExp - 1);
 
