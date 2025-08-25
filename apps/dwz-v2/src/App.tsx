@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { type Household, type Assumptions } from "dwz-core";
 import { useDecision } from "./lib/useDecision";
 import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
+import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
@@ -57,12 +58,25 @@ export default function App() {
     lifeExp
   }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, annualSavings, lifeExp]);
   
-  const { data: optimizerData, loading: optimizerLoading } = useSavingsSplitOptimizer(
+  // Use plan-first optimizer when plan is set, otherwise fall back to generic optimizer
+  const { data: genericOptimizerData, loading: genericOptimizerLoading } = useSavingsSplitOptimizer(
     baseHousehold, 
     assumptions, 
     optimizerPolicy, 
-    autoOptimize && annualSavings > 0
+    autoOptimize && annualSavings > 0 && !planSpend
   );
+  
+  const { data: planOptimizerData, loading: planOptimizerLoading } = useSavingsSplitForPlan(
+    baseHousehold,
+    assumptions,
+    optimizerPolicy,
+    planSpend,
+    autoOptimize && annualSavings > 0 && !!planSpend
+  );
+  
+  // Select which optimizer result to use
+  const optimizerData = planSpend ? planOptimizerData : genericOptimizerData;
+  const optimizerLoading = planSpend ? planOptimizerLoading : genericOptimizerLoading;
   
   const { data: planFirstData, loading: planFirstLoading } = usePlanFirstSolver(
     baseHousehold,
@@ -95,7 +109,7 @@ export default function App() {
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    planFirstData?.earliestAge ?? undefined
+    planSpend && planFirstData ? planFirstData.earliestAge : undefined
   );
 
   return (
@@ -156,7 +170,7 @@ export default function App() {
                 checked={autoOptimize} 
                 onChange={e => setAutoOptimize(e.target.checked)}
               />
-              {' '}Auto-optimize for earliest retirement
+              {' '}Auto-optimize {planSpend ? `for earliest age at $${planSpend.toLocaleString()}/yr` : 'for earliest retirement'}
             </label>
             {!autoOptimize && (
               <div style={{ marginTop: 8 }}>
@@ -194,7 +208,9 @@ export default function App() {
         {optimizerData && autoOptimize && (
           <div style={{ marginTop: 12, padding: 8, background: "#f0f8ff", borderRadius: 4 }}>
             <strong>Optimizer Result:</strong> {Math.round(optimizerData.recommendedPct * 100)}% to super 
-            → retire at age {optimizerData.earliestAge} (vs manual split)
+            → {planSpend 
+                ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for $${planSpend.toLocaleString()}/yr plan`
+                : `retire at age ${optimizerData.earliestAge}`}
             <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
               Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
               Evaluations: {optimizerData.evals}

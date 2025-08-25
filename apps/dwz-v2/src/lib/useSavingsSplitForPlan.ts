@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import type { DecisionDwz, Household, Assumptions } from "dwz-core";
+import type { Household, Assumptions } from "dwz-core";
+import type { SavingsSplitForPlanResult } from "dwz-core";
 
-export function useDecision(h: Household, a: Assumptions, forceRetireAge?: number) {
-  const [data, setData] = useState<DecisionDwz | null>(null);
+export function useSavingsSplitForPlan(
+  h: Household, 
+  a: Assumptions,
+  policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number },
+  plan: number | null,
+  enabled: boolean = true
+) {
+  const [data, setData] = useState<SavingsSplitForPlanResult | null>(null);
   const [loading, setLoading] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const counter = useRef(0);
@@ -13,29 +20,29 @@ export function useDecision(h: Household, a: Assumptions, forceRetireAge?: numbe
   }, []);
 
   useEffect(() => {
-    if (!workerRef.current) return;
+    if (!workerRef.current || !enabled || !plan || plan <= 0) {
+      setData(null);
+      return;
+    }
+    
     setLoading(true);
     const id = ++counter.current;
     const onMsg = (e: MessageEvent) => {
       if (e.data.id !== id) return;
       setLoading(false);
-      if (e.data.ok) {
-        setData(e.data.result);
-      } else {
-        console.error('useDecision error:', e.data.error);
-        setData(null);
-      }
+      e.data.ok ? setData(e.data.result) : console.error(e.data.error);
     };
     workerRef.current.addEventListener("message", onMsg);
     workerRef.current.postMessage({ 
       id, 
-      type: 'COMPUTE_DECISION', 
+      type: 'OPTIMIZE_SPLIT_FOR_PLAN', 
       household: h, 
       assumptions: a,
-      forceRetireAge 
+      plan,
+      policy
     });
     return () => workerRef.current?.removeEventListener("message", onMsg);
-  }, [JSON.stringify(h), JSON.stringify(a), forceRetireAge]); // simple, stable
+  }, [JSON.stringify(h), JSON.stringify(a), JSON.stringify(policy), plan, enabled]);
 
   return { data, loading };
 }
