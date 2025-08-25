@@ -139,6 +139,8 @@ export function optimizeSavingsSplitForPlan(
   type PlanEval = { earliestAge: number | null; atAgeSpend?: number; constraints: SavingsSplitConstraints };
   const memo = new Map<number, PlanEval>();
   let evals = 0;
+  // Track a rolling best age to use as a high bound hint for later evaluations
+  let bestAgeHint: number | undefined = undefined;
 
   const evalAt = (pctRaw: number): PlanEval => {
     const pct = clamp(round4(Math.min(maxPct, Math.max(0, pctRaw))), 0, 1);
@@ -155,7 +157,7 @@ export function optimizeSavingsSplitForPlan(
       }
     };
     
-    const res = findEarliestAgeForPlan(input, plan);
+    const res = findEarliestAgeForPlan(input, plan, { hiAgeHint: bestAgeHint });
     evals += res.evaluations;
     
     const constraints: SavingsSplitConstraints = {
@@ -167,6 +169,12 @@ export function optimizeSavingsSplitForPlan(
     
     const out = { earliestAge: res.earliestAge, atAgeSpend: res.atAgeSpend, constraints };
     memo.set(pct, out);
+    
+    // If feasible, tighten hint
+    if (res.earliestAge != null) {
+      bestAgeHint = bestAgeHint == null ? res.earliestAge : Math.min(bestAgeHint, res.earliestAge);
+    }
+    
     return out;
   };
 
@@ -199,6 +207,8 @@ export function optimizeSavingsSplitForPlan(
     if (e.earliestAge != null && (bestEval.earliestAge == null || e.earliestAge < bestEval.earliestAge)) {
       bestEval = e;
       bestPct = clamp(pct, 0, 1);
+      // Newly improved best age further tightens future searches
+      bestAgeHint = e.earliestAge;
     }
   }
 
