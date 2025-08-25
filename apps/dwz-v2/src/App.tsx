@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { type Household, type Assumptions } from "dwz-core";
 import { useDecision } from "./lib/useDecision";
 import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
@@ -7,6 +7,7 @@ import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
 import PlanSpendInput from "./components/PlanSpendInput";
+import { COUPLES_PLAN_DEFAULT, SINGLE_PLAN_DEFAULT } from "./constants/defaults";
 
 export default function App() {
   // Couples-first defaults
@@ -28,8 +29,21 @@ export default function App() {
   const [capPerPerson, setCapPerPerson] = useState(30000);
   const [eligiblePeople, setEligiblePeople] = useState(2);
   
-  // Plan-first solver
+  // Plan-first solver with default
   const [planSpend, setPlanSpend] = useState<number | null>(null);
+  
+  // Compute default plan based on household size
+  const computeDefaultPlan = (peopleCount: number): number => {
+    return peopleCount >= 2 ? COUPLES_PLAN_DEFAULT : SINGLE_PLAN_DEFAULT;
+  };
+  
+  // Set default plan on first load if not already set
+  useEffect(() => {
+    if (planSpend === null) {
+      const peopleCount = 2; // For now, assume couples (can be made dynamic later)
+      setPlanSpend(computeDefaultPlan(peopleCount));
+    }
+  }, []); // Only run once on mount
 
   const assumptions = useMemo<Assumptions>(() => ({
     realReturn: 0.059,
@@ -234,17 +248,6 @@ export default function App() {
 
       <hr style={{ margin: "24px 0" }} />
 
-      {/* Plan-first mandatory: Show empty state when no plan */}
-      {!planSpend && (
-        <div style={{ padding: 16, borderRadius: 8, background: "#fef3c7", border: "1px solid #fbbf24", marginBottom: 12 }}>
-          <strong style={{ fontSize: 18 }}>Enter your annual plan spend to begin</strong>
-          <p style={{ marginTop: 8, marginBottom: 0, color: "#78716c" }}>
-            This calculator finds the earliest age you can retire and sustain that spending 
-            while still depleting to ~$0 at life expectancy (true DWZ methodology).
-          </p>
-        </div>
-      )}
-
       {/* Show not achievable message when plan is set but not viable */}
       {planSpend && planFirstData && planFirstData.earliestAge === null && (
         <div style={{ padding: 16, borderRadius: 8, background: "#fee2e2", border: "1px solid #f87171", marginBottom: 12 }}>
@@ -258,9 +261,9 @@ export default function App() {
       )}
 
       {/* Loading state */}
-      {(loading || (planSpend && planFirstLoading)) && <p>Calculating…</p>}
+      {(loading || planFirstLoading) && <p>Calculating…</p>}
 
-      {/* Show results only when plan is achievable */}
+      {/* Show results when plan is achievable */}
       {planSpend && planFirstData && planFirstData.earliestAge !== null && data && (
         <>
           <div style={{ padding: 12, borderRadius: 8, background: "#e8f8ef", marginBottom: 12 }}>
