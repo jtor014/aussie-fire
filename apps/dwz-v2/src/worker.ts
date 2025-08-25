@@ -1,10 +1,11 @@
 /// <reference lib="webworker" />
-import { findEarliestViable, optimizeSavingsSplit } from "dwz-core";
+import { findEarliestViable, optimizeSavingsSplit, findEarliestAgeForPlan } from "dwz-core";
 import type { Inputs, Bands, Household, Assumptions } from "dwz-core";
 
 type WorkerMessage = 
   | { id: number; type: 'COMPUTE_DECISION'; household: Household; assumptions: Assumptions }
-  | { id: number; type: 'OPTIMIZE_SAVINGS_SPLIT'; household: Household; assumptions: Assumptions; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } };
+  | { id: number; type: 'OPTIMIZE_SAVINGS_SPLIT'; household: Household; assumptions: Assumptions; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } }
+  | { id: number; type: 'EARLIEST_AGE_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number };
 
 self.addEventListener("message", (e: MessageEvent) => {
   const msg = e.data as WorkerMessage;
@@ -14,6 +15,8 @@ self.addEventListener("message", (e: MessageEvent) => {
       handleComputeDecision(msg);
     } else if (msg.type === 'OPTIMIZE_SAVINGS_SPLIT') {
       handleOptimizeSavingsSplit(msg);
+    } else if (msg.type === 'EARLIEST_AGE_FOR_PLAN') {
+      handleEarliestAgeForPlan(msg);
     }
   } catch (err: any) {
     (self as any).postMessage({ id: msg.id, ok: false, error: String(err?.message || err) });
@@ -81,6 +84,13 @@ function handleComputeDecision(msg: Extract<WorkerMessage, { type: 'COMPUTE_DECI
 function handleOptimizeSavingsSplit(msg: Extract<WorkerMessage, { type: 'OPTIMIZE_SAVINGS_SPLIT' }>) {
   const inp = convertToSolverInput(msg.household, msg.assumptions);
   const result = optimizeSavingsSplit(inp, msg.policy);
+  
+  (self as any).postMessage({ id: msg.id, ok: true, result });
+}
+
+function handleEarliestAgeForPlan(msg: Extract<WorkerMessage, { type: 'EARLIEST_AGE_FOR_PLAN' }>) {
+  const baseInput = convertToSolverInput(msg.household, msg.assumptions);
+  const result = findEarliestAgeForPlan(baseInput, msg.plan);
   
   (self as any).postMessage({ id: msg.id, ok: true, result });
 }

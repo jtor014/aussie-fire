@@ -2,8 +2,10 @@ import { useMemo, useState } from "react";
 import { type Household, type Assumptions } from "dwz-core";
 import { useDecision } from "./lib/useDecision";
 import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
+import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
+import PlanSpendInput from "./components/PlanSpendInput";
 
 export default function App() {
   // Couples-first defaults
@@ -24,6 +26,9 @@ export default function App() {
   const [manualSplitPct, setManualSplitPct] = useState(0.5);
   const [capPerPerson, setCapPerPerson] = useState(30000);
   const [eligiblePeople, setEligiblePeople] = useState(2);
+  
+  // Plan-first solver
+  const [planSpend, setPlanSpend] = useState<number | null>(null);
 
   const assumptions = useMemo<Assumptions>(() => ({
     realReturn: 0.059,
@@ -57,6 +62,13 @@ export default function App() {
     assumptions, 
     optimizerPolicy, 
     autoOptimize && annualSavings > 0
+  );
+  
+  const { data: planFirstData, loading: planFirstLoading } = usePlanFirstSolver(
+    baseHousehold,
+    assumptions,
+    planSpend,
+    true
   );
 
   const household = useMemo<Household>(() => {
@@ -106,6 +118,13 @@ export default function App() {
         <label>Savings / yr (combined) <input type="number" value={annualSavings} onChange={e=>setAnnualSavings(+e.target.value)} /></label>
         <label>Life expectancy <input type="number" value={lifeExp} onChange={e=>setLifeExp(+e.target.value)} /></label>
       </section>
+
+      <PlanSpendInput 
+        planSpend={planSpend}
+        onPlanSpendChange={setPlanSpend}
+        result={planFirstData}
+        loading={planFirstLoading}
+      />
 
       <details style={{ marginTop: 16 }}>
         <summary>Advanced: Spending Cap (Optional)</summary>
@@ -198,8 +217,27 @@ export default function App() {
       {data && (
         <>
           <div style={{ padding: 12, borderRadius: 8, background: "#e8f8ef", marginBottom: 12 }}>
-            <strong>You can retire at age {data.earliest.viable}</strong> with DWZ.
-            <div>Sustainable spending (DWZ): <strong>${Math.round(data.sustainableAnnual).toLocaleString()}/yr</strong></div>
+            {/* Plan-first banner when plan is set and results available */}
+            {planSpend && planFirstData ? (
+              <div>
+                <strong>
+                  {planFirstData.earliestAge !== null
+                    ? `At your plan $${planSpend.toLocaleString()}/yr, earliest viable age is ${planFirstData.earliestAge}.`
+                    : `Your plan $${planSpend.toLocaleString()}/yr is not achievable under current assumptions.`}
+                </strong>
+                {planFirstData.atAgeSpend && (
+                  <div style={{ marginTop: 4 }}>
+                    DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>${Math.round(planFirstData.atAgeSpend).toLocaleString()}/yr</strong>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <strong>You can retire at age {data.earliest.viable}</strong> with DWZ.
+                <div>Sustainable spending (DWZ): <strong>${Math.round(data.sustainableAnnual).toLocaleString()}/yr</strong></div>
+              </div>
+            )}
+            
             <div>Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need ${Math.round(data.bridge.need).toLocaleString()} PV, have ${Math.round(data.bridge.have).toLocaleString()} for {data.bridge.years} years</div>
             {household.preFireSavingsSplit && (
               <div>

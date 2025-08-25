@@ -2,6 +2,7 @@ import { Assumptions, Band, Bridge, DecisionDwz, Household, PathPoint, Lifecycle
 export * from "./types.js";
 export * from "./solver.js";
 export { optimizeSavingsSplit } from "./optimizer/savingsSplit.js";
+export { findEarliestAgeForPlan } from "./planning/earliestForPlan.js";
 
 const EPS = 1;
 const clampRate = (r: number) => Math.max(-0.99, r);
