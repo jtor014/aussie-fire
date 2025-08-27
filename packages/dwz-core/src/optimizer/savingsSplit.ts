@@ -268,7 +268,7 @@ export function optimizeSavingsSplitForPlan(
     memo.forEach((v, k) => {
       if (v.earliestAge != null && (v.earliestAge as number) <= targetAge + tol + 1e-9) cands.push(k);
     });
-    // For each candidate, evaluate total wealth at the start of retirement at targetAge
+    // For each candidate, evaluate total wealth at the retirement boundary (last accumulation point)
     let bestWealth = -Infinity;
     for (const p of cands) {
       const at = accumulateUntil({
@@ -281,7 +281,7 @@ export function optimizeSavingsSplitForPlan(
           outsideTaxRate: policy.outsideTaxRate,
           mode: 'grossDeferral'
         }
-      }, targetAge);
+      }, targetAge - 1);  // Use retirement boundary (last accumulation point)
       const w = at.outside + at.super;
       if (w > bestWealth) { bestWealth = w; chosenPct = p; }
     }
