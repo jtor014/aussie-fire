@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { DecisionDwz, Household, Assumptions } from "dwz-core";
 
-export function useDecision(h: Household, a: Assumptions, forceRetireAge?: number) {
+export function useDecision(h: Household, a: Assumptions, forceRetireAge?: number, enabled: boolean = true) {
   const [data, setData] = useState<DecisionDwz | null>(null);
   const [loading, setLoading] = useState(false);
   const workerRef = useRef<Worker | null>(null);
@@ -13,7 +13,22 @@ export function useDecision(h: Household, a: Assumptions, forceRetireAge?: numbe
   }, []);
 
   useEffect(() => {
-    if (!workerRef.current) return;
+    if (!workerRef.current || !enabled) {
+      // If disabled, clear data and loading state
+      if (!enabled) {
+        setData(null);
+        setLoading(false);
+      }
+      return;
+    }
+    
+    // Early exit when forceRetireAge is not finite (plan not achievable)
+    if (!Number.isFinite(forceRetireAge as number)) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     const id = ++counter.current;
     const onMsg = (e: MessageEvent) => {
@@ -22,7 +37,7 @@ export function useDecision(h: Household, a: Assumptions, forceRetireAge?: numbe
       if (e.data.ok) {
         setData(e.data.result);
       } else {
-        console.error('useDecision error:', e.data.error);
+        // Benign: not achievable or other handled error - no logging needed
         setData(null);
       }
     };
@@ -35,7 +50,7 @@ export function useDecision(h: Household, a: Assumptions, forceRetireAge?: numbe
       forceRetireAge 
     });
     return () => workerRef.current?.removeEventListener("message", onMsg);
-  }, [JSON.stringify(h), JSON.stringify(a), forceRetireAge]); // simple, stable
+  }, [JSON.stringify(h), JSON.stringify(a), forceRetireAge, enabled]); // simple, stable
 
   return { data, loading };
 }

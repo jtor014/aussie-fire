@@ -135,10 +135,13 @@ export default function App() {
   }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings]);
 
   // Pass the earliest age from plan-first solver to ensure consistency
+  // Only call solver if we have an achievable plan (earliest age is not null)
+  const shouldSolve = planSpend && planFirstData && planFirstData.earliestAge !== null;
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    planSpend && planFirstData ? planFirstData.earliestAge ?? undefined : undefined
+    shouldSolve ? planFirstData.earliestAge : undefined,
+    shouldSolve  // Pass enabled flag to prevent solver call when not achievable
   );
 
   return (
@@ -364,11 +367,13 @@ export default function App() {
       {planSpend && planFirstData && planFirstData.earliestAge === null && (
         <div style={{ padding: 16, borderRadius: 8, background: "#fee2e2", border: "1px solid #f87171", marginBottom: 12 }}>
           <strong style={{ fontSize: 18 }}>
-            Your plan ${planSpend.toLocaleString()}/yr is not achievable under current assumptions
+            Plan not achievable under current assumptions
           </strong>
-          <p style={{ marginTop: 8, marginBottom: 0, color: "#78716c" }}>
-            Try reducing expenses, increasing savings, or adjusting other parameters.
-          </p>
+          <ul style={{ marginTop: 8, marginLeft: 20, marginBottom: 0, color: "#78716c", fontSize: 14 }}>
+            <li>Target spend may be too high for your balances & horizon.</li>
+            <li>Bridge to preservation might be underfunded (try lower age or more outside savings).</li>
+            <li>Increase savings or reduce annual spend to test viability.</li>
+          </ul>
         </div>
       )}
 
@@ -403,12 +408,12 @@ export default function App() {
         </>
       )}
 
-      {/* Show chart whenever we have viable plan data, independent of other conditions */}
-      {planSpend && data && data.path && data.path.length > 1 && (
+      {/* Show chart only when plan exists, is achievable, AND we have solve data */}
+      {planSpend && planFirstData && planFirstData.earliestAge !== null && data && data.path && data.path.length > 1 && (
         <WealthChart 
           path={data.path} 
           lifeExp={household.lifeExp}
-          retireAge={planFirstData?.earliestAge ?? undefined}
+          retireAge={planFirstData.earliestAge}
         />
       )}
     </div>
