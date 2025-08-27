@@ -1,7 +1,7 @@
 import { LineChart, Line, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer, ReferenceLine, ReferenceArea } from "recharts";
 import type { PathPoint } from "dwz-core";
 
-export default function WealthChart({ path, lifeExp }: { path: PathPoint[]; lifeExp: number }) {
+export default function WealthChart({ path, lifeExp, retireAge }: { path: PathPoint[]; lifeExp: number; retireAge?: number }) {
   if (!path?.length) return null;
 
   // Find bridge window for shading
@@ -80,6 +80,16 @@ export default function WealthChart({ path, lifeExp }: { path: PathPoint[]; life
           />
           
           <ReferenceLine x={lifeExp} strokeDasharray="4 4" />
+          
+          {/* Retire marker */}
+          {Number.isFinite(retireAge) && (
+            <ReferenceLine
+              x={retireAge}
+              label={{ value: 'Retire', position: 'insideTop', offset: 6, fill: '#555' }}
+              stroke="#999"
+              strokeDasharray="4 4"
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
       
