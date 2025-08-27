@@ -138,7 +138,6 @@ export default function App() {
 
   // Pass the earliest age from plan-first solver to ensure consistency
   const forceRetireAge = planSpend && planFirstData ? planFirstData.earliestAge ?? undefined : undefined;
-  console.log('Debug: forceRetireAge=', forceRetireAge, 'planFirstData=', planFirstData, 'household split=', household.preFireSavingsSplit?.toSuperPct);
   const { data, loading } = useDecision(
     household, 
     assumptions, 
