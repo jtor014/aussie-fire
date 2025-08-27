@@ -43,7 +43,8 @@
       "Bash(git cherry-pick:*)",
       "Bash(npm -w packages/dwz-core run build)",
       "Bash(npm run:*)",
-      "Bash(pnpm --filter packages/dwz-core test)"
+      "Bash(pnpm --filter packages/dwz-core test)",
+      "Bash(keeping 0% within tolerance.\"\n- \"Optimal split 45%→super achieves earliest age 52.\"\n\n## Test Results\n- All existing tests pass ✅\n- Build successful ✅\n- No math changes to optimizer logic ✅\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
