@@ -400,13 +400,16 @@ export default function App() {
             )}
             
           </div>
-
-          <WealthChart 
-            path={data.path} 
-            lifeExp={household.lifeExp}
-            retireAge={planFirstData?.earliestAge ?? undefined}
-          />
         </>
+      )}
+
+      {/* Show chart whenever we have viable plan data, independent of other conditions */}
+      {planSpend && data && data.path && data.path.length > 1 && (
+        <WealthChart 
+          path={data.path} 
+          lifeExp={household.lifeExp}
+          retireAge={planFirstData?.earliestAge ?? undefined}
+        />
       )}
     </div>
   );
