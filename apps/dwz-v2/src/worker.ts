@@ -6,7 +6,7 @@ type WorkerMessage =
   | { id: number; type: 'COMPUTE_DECISION'; household: Household; assumptions: Assumptions; forceRetireAge?: number }
   | { id: number; type: 'OPTIMIZE_SAVINGS_SPLIT'; household: Household; assumptions: Assumptions; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } }
   | { id: number; type: 'EARLIEST_AGE_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number }
-  | { id: number; type: 'OPTIMIZE_SPLIT_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } };
+  | { id: number; type: 'OPTIMIZE_SPLIT_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; outsideTaxRate?: number; maxPct?: number }; opts?: { gridPoints?: number; refineIters?: number; window?: number; ageToleranceYears?: number; preferSuperTieBreak?: boolean } };
 
 self.addEventListener("message", (e: MessageEvent) => {
   const msg = e.data as WorkerMessage;
@@ -102,7 +102,7 @@ function handleEarliestAgeForPlan(msg: Extract<WorkerMessage, { type: 'EARLIEST_
 
 function handleOptimizeSplitForPlan(msg: Extract<WorkerMessage, { type: 'OPTIMIZE_SPLIT_FOR_PLAN' }>) {
   const baseInput = convertToSolverInput(msg.household, msg.assumptions);
-  const result = optimizeSavingsSplitForPlan(baseInput, msg.plan, msg.policy);
+  const result = optimizeSavingsSplitForPlan(baseInput, msg.plan, msg.policy, msg.opts);
   
   (self as any).postMessage({ id: msg.id, ok: true, result });
 }

@@ -29,6 +29,8 @@ export default function App() {
   const [capPerPerson, setCapPerPerson] = useState(30000);
   const [eligiblePeople, setEligiblePeople] = useState(2);
   const [outsideTaxRate, setOutsideTaxRate] = useState(0.32); // default 32% including Medicare
+  const [preferSuperTieBreak, setPreferSuperTieBreak] = useState(true);
+  const [ageToleranceYears, setAgeToleranceYears] = useState(0);
   
   // Plan-first solver with default
   const [planSpend, setPlanSpend] = useState<number | null>(null);
@@ -65,6 +67,14 @@ export default function App() {
     maxPct: 1.0
   }), [capPerPerson, eligiblePeople, outsideTaxRate]);
 
+  const optimizerOpts = useMemo(() => ({
+    gridPoints: 21,
+    refineIters: 2, 
+    window: 0.15,
+    preferSuperTieBreak: preferSuperTieBreak,
+    ageToleranceYears: Math.max(0, Math.min(5, ageToleranceYears))
+  }), [preferSuperTieBreak, ageToleranceYears]);
+
   // Create a basic household for the optimizer (without savings split)
   const baseHousehold = useMemo<Household>(() => ({
     p1: { age: p1Age, income: income1, outside: out1, superBal: sup1, preserveAge: 60, superPrem: 0 },
@@ -87,6 +97,7 @@ export default function App() {
     assumptions,
     optimizerPolicy,
     planSpend,
+    optimizerOpts,
     autoOptimize && annualSavings > 0 && !!planSpend
   );
   
@@ -114,7 +125,7 @@ export default function App() {
       eligiblePeople,
       contribTaxRate: 0.15,
       outsideTaxRate: Math.max(0, Math.min(0.65, outsideTaxRate)),
-      mode: autoOptimize ? 'grossDeferral' as const : 'netFixed' as const
+      mode: autoOptimize && optimizerData ? 'grossDeferral' as const : 'netFixed' as const
     } : undefined;
     
     return {
@@ -282,6 +293,34 @@ export default function App() {
                 <option value={1}>1 (single)</option>
                 <option value={2}>2 (couple)</option>
               </select>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <input 
+                type="checkbox" 
+                checked={preferSuperTieBreak} 
+                onChange={e => setPreferSuperTieBreak(e.target.checked)}
+              />
+              Prefer super when start age is the same
+            </label>
+            <label style={{ display: 'block', marginTop: 8, fontSize: 13 }}>
+              Tolerance (years):
+              <input 
+                type="number" 
+                min="0" 
+                max="5" 
+                step="0.5"
+                value={ageToleranceYears} 
+                onChange={e => setAgeToleranceYears(Math.max(0, Math.min(5, +e.target.value || 0)))}
+                style={{
+                  width: '60px',
+                  padding: '4px 6px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 4,
+                  fontSize: 13,
+                  marginLeft: 8
+                }}
+                title="How many years of delay are acceptable while still preferring super"
+              />
             </label>
           </div>
         </div>
