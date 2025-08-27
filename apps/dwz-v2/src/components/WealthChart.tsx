@@ -2,66 +2,84 @@ import {
   ResponsiveContainer, LineChart, Line, CartesianGrid, Tooltip, XAxis, YAxis,
   ReferenceLine, ReferenceArea, Legend
 } from "recharts";
-import type { PathPoint } from "dwz-core";
 
 type ChartRow = {
   age: number;
   accumulation: number | null;
   retirement: number | null;
   bridge: number | null;
+  // hold total for fallback/tooltip
+  total?: number;
 };
 
 export default function WealthChart(
-  { path, lifeExp, retireAge }: { path: PathPoint[]; lifeExp: number; retireAge?: number }
+  { path, lifeExp, retireAge }: { path: any[]; lifeExp: number; retireAge?: number }
 ) {
-  if (!Array.isArray(path) || path.length < 2) {
-    console.log('[WealthChart] No valid path data:', { pathLength: path?.length, path });
-    return null;
-  }
+  if (!Array.isArray(path) || path.length < 2) return null;
 
-  // Debug: log the first few path points to understand the structure
-  console.log('[WealthChart] First 3 path points:', path.slice(0, 3));
+  // Helpers to normalise various solver shapes
+  const getAge = (p: any) =>
+    Number(p?.age ?? p?.endAge ?? p?.t ?? 0);
 
-  // Bridge window for shading - use lifecyclePhase if available, fallback to phase mapping
-  const bridge = path.filter(p => p.lifecyclePhase === "bridge" || p.phase === "bridge");
-  const bridgeStart = bridge[0]?.age;
-  const bridgeEnd = bridge.length ? bridge[bridge.length - 1]?.age : undefined;
+  const getBalances = (p: any) => {
+    if (p?.balances) {
+      return {
+        outside: Number(p.balances.outside ?? 0),
+        super: Number(p.balances.super ?? p.balances.superBal ?? 0),
+      };
+    }
+    return {
+      outside: Number(p.outside ?? p.nonSuper ?? 0),
+      super: Number(p.super ?? p.superBal ?? 0),
+    };
+  };
 
-  // Helper to determine lifecycle phase with fallback
-  const getLifecyclePhase = (p: PathPoint): 'accum' | 'bridge' | 'retire' | null => {
-    if (p.lifecyclePhase) return p.lifecyclePhase;
-    // Fallback mapping from phase to lifecycle (if needed)
-    if (p.phase === "accum") return "accum";
-    if (p.phase === "bridge") return "bridge";  
-    if (p.phase === "retire") return "retire";
-    // If we can't determine, try to infer from age patterns
+  const getTotal = (p: any) => {
+    if (Number.isFinite(Number(p?.total))) return Number(p.total);
+    const b = getBalances(p);
+    return (b.outside || 0) + (b.super || 0);
+  };
+
+  const getLifePhase = (p: any): 'accum' | 'bridge' | 'retire' | null => {
+    const lc = p?.lifecyclePhase;
+    const ph = p?.phase;
+    if (lc === 'accum' || lc === 'bridge' || lc === 'retire') return lc;
+    if (ph === 'accum' || ph === 'bridge' || ph === 'retire') return ph;
+    if (Number.isFinite(retireAge)) {
+      const a = getAge(p);
+      // Heuristic: before retireAge = accum, after = retire (we won't guess bridge)
+      return a < (retireAge as number) ? 'accum' : 'retire';
+    }
     return null;
   };
 
-  // Canonical transform -> stable keys for Recharts
-  const data: ChartRow[] = path.map(p => {
-    const lifecycle = getLifecyclePhase(p);
+  // Bridge window for shading (prefer explicit markers; otherwise use retireAge as start)
+  const bridge = path.filter((p) => p?.lifecyclePhase === 'bridge' || p?.phase === 'bridge');
+  const bridgeStart = bridge[0]?.age;
+  const bridgeEnd = bridge.length ? bridge[bridge.length - 1]?.age : undefined;
+
+  // Canonical transform -> stable keys; compute total when missing
+  const rows: ChartRow[] = path.map((p) => {
+    const age = getAge(p);
+    const total = getTotal(p);
+    const life = getLifePhase(p);
     return {
-      age: p.age,
-      accumulation: lifecycle === "accum"  ? p.total : null,
-      retirement:   lifecycle === "retire" ? p.total : null,
-      bridge:       lifecycle === "bridge" ? p.total : null
+      age,
+      accumulation: life === 'accum' ? total : null,
+      retirement: life === 'retire' ? total : null,
+      bridge: life === 'bridge' ? total : null,
+      total,
     };
   });
 
-  // Debug: check if we have any non-null values
-  const hasAccum = data.some(d => d.accumulation !== null);
-  const hasRetire = data.some(d => d.retirement !== null);
-  const hasBridge = data.some(d => d.bridge !== null);
-  console.log('[WealthChart] Data check:', { hasAccum, hasRetire, hasBridge, dataLength: data.length });
-
-  // If no lifecycle phases detected, fall back to showing all as accumulation
-  const fallbackData: ChartRow[] = data.every(d => d.accumulation === null && d.retirement === null && d.bridge === null)
-    ? path.map(p => ({ age: p.age, accumulation: p.total, retirement: null, bridge: null }))
-    : data;
+  // If we failed to classify phases at all, fall back to a single "Total" line
+  const noPhases = rows.every(r => r.accumulation == null && r.retirement == null && r.bridge == null);
+  const data: ChartRow[] = noPhases
+    ? rows.map(({ age, total }) => ({ age, accumulation: total ?? 0, retirement: null, bridge: null }))
+    : rows;
 
   // Compute Y bounds with some headroom
-  const vals = path.map(p => p.total);
+  const vals = rows.map(r => r.total ?? 0);
   const minY = Math.min(0, ...vals);
   const maxY = Math.max(...vals);
   const pad = Math.max(1, (maxY - minY) * 0.05);
@@ -69,7 +87,7 @@ export default function WealthChart(
   return (
     <div className="w-full" style={{ minHeight: 360 }}>
       <ResponsiveContainer width="100%" height={360}>
-        <LineChart data={fallbackData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="age" />
           <YAxis domain={[minY - pad, maxY + pad]} tickFormatter={(v) => `${Math.round(v/1000)}k`} />
@@ -92,7 +110,7 @@ export default function WealthChart(
           )}
 
           {/* Bridge shading */}
-          {Number.isFinite(bridgeStart) && Number.isFinite(bridgeEnd) && (
+          {(Number.isFinite(bridgeStart as any) && Number.isFinite(bridgeEnd as any)) ? (
             <ReferenceArea 
               x1={bridgeStart as number} 
               x2={(bridgeEnd as number) + 0.99} 
@@ -100,7 +118,14 @@ export default function WealthChart(
               fill="#ff7c7c"
               label={{ value: "Bridge Period", position: "insideTopLeft" }}
             />
-          )}
+          ) : (Number.isFinite(retireAge as any) && (
+            <ReferenceArea 
+              x1={retireAge as number} 
+              x2={(retireAge as number) + 0.99} 
+              fillOpacity={0.08} 
+              fill="#ccc"
+            />
+          ))}
 
           <ReferenceLine x={lifeExp} strokeDasharray="4 4" stroke="#ccc" />
         </LineChart>
