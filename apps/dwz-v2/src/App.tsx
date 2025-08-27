@@ -125,7 +125,7 @@ export default function App() {
       eligiblePeople,
       contribTaxRate: 0.15,
       outsideTaxRate: Math.max(0, Math.min(0.65, outsideTaxRate)),
-      mode: autoOptimize ? 'grossDeferral' as const : 'netFixed' as const
+      mode: autoOptimize && optimizerData ? 'grossDeferral' as const : 'netFixed' as const
     } : undefined;
     
     return {
