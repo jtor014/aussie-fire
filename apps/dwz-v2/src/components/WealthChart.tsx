@@ -14,20 +14,51 @@ type ChartRow = {
 export default function WealthChart(
   { path, lifeExp, retireAge }: { path: PathPoint[]; lifeExp: number; retireAge?: number }
 ) {
-  if (!Array.isArray(path) || path.length < 2) return null;
+  if (!Array.isArray(path) || path.length < 2) {
+    console.log('[WealthChart] No valid path data:', { pathLength: path?.length, path });
+    return null;
+  }
 
-  // Bridge window for shading
-  const bridge = path.filter(p => p.lifecyclePhase === "bridge");
+  // Debug: log the first few path points to understand the structure
+  console.log('[WealthChart] First 3 path points:', path.slice(0, 3));
+
+  // Bridge window for shading - use lifecyclePhase if available, fallback to phase mapping
+  const bridge = path.filter(p => p.lifecyclePhase === "bridge" || p.phase === "bridge");
   const bridgeStart = bridge[0]?.age;
   const bridgeEnd = bridge.length ? bridge[bridge.length - 1]?.age : undefined;
 
+  // Helper to determine lifecycle phase with fallback
+  const getLifecyclePhase = (p: PathPoint): 'accum' | 'bridge' | 'retire' | null => {
+    if (p.lifecyclePhase) return p.lifecyclePhase;
+    // Fallback mapping from phase to lifecycle (if needed)
+    if (p.phase === "accum") return "accum";
+    if (p.phase === "bridge") return "bridge";  
+    if (p.phase === "retire") return "retire";
+    // If we can't determine, try to infer from age patterns
+    return null;
+  };
+
   // Canonical transform -> stable keys for Recharts
-  const data: ChartRow[] = path.map(p => ({
-    age: p.age,
-    accumulation: p.lifecyclePhase === "accum"  ? p.total : null,
-    retirement:   p.lifecyclePhase === "retire" ? p.total : null,
-    bridge:       p.lifecyclePhase === "bridge" ? p.total : null
-  }));
+  const data: ChartRow[] = path.map(p => {
+    const lifecycle = getLifecyclePhase(p);
+    return {
+      age: p.age,
+      accumulation: lifecycle === "accum"  ? p.total : null,
+      retirement:   lifecycle === "retire" ? p.total : null,
+      bridge:       lifecycle === "bridge" ? p.total : null
+    };
+  });
+
+  // Debug: check if we have any non-null values
+  const hasAccum = data.some(d => d.accumulation !== null);
+  const hasRetire = data.some(d => d.retirement !== null);
+  const hasBridge = data.some(d => d.bridge !== null);
+  console.log('[WealthChart] Data check:', { hasAccum, hasRetire, hasBridge, dataLength: data.length });
+
+  // If no lifecycle phases detected, fall back to showing all as accumulation
+  const fallbackData: ChartRow[] = data.every(d => d.accumulation === null && d.retirement === null && d.bridge === null)
+    ? path.map(p => ({ age: p.age, accumulation: p.total, retirement: null, bridge: null }))
+    : data;
 
   // Compute Y bounds with some headroom
   const vals = path.map(p => p.total);
@@ -38,7 +69,7 @@ export default function WealthChart(
   return (
     <div className="w-full" style={{ minHeight: 360 }}>
       <ResponsiveContainer width="100%" height={360}>
-        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+        <LineChart data={fallbackData} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="age" />
           <YAxis domain={[minY - pad, maxY + pad]} tickFormatter={(v) => `${Math.round(v/1000)}k`} />
