@@ -332,6 +332,11 @@ export default function App() {
             → {planSpend 
                 ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for $${planSpend.toLocaleString()}/yr plan`
                 : `retire at age ${optimizerData.earliestAge}`}
+            {optimizerData.explanation && (
+              <div style={{ fontSize: 13, color: "#555", marginTop: 6, fontStyle: "italic" }}>
+                {optimizerData.explanation}
+              </div>
+            )}
             <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
               Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
               Evaluations: {optimizerData.evals}
@@ -396,7 +401,11 @@ export default function App() {
             
           </div>
 
-          <WealthChart path={data.path} lifeExp={household.lifeExp} />
+          <WealthChart 
+            path={data.path} 
+            lifeExp={household.lifeExp}
+            retireAge={planFirstData?.earliestAge ?? undefined}
+          />
         </>
       )}
     </div>
