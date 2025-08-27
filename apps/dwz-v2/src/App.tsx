@@ -105,13 +105,6 @@ export default function App() {
   const optimizerData = planSpend ? planOptimizerData : genericOptimizerData;
   const optimizerLoading = planSpend ? planOptimizerLoading : genericOptimizerLoading;
   
-  const { data: planFirstData, loading: planFirstLoading } = usePlanFirstSolver(
-    baseHousehold,
-    assumptions,
-    planSpend,
-    true
-  );
-
   const household = useMemo<Household>(() => {
     // Determine effective split percentage
     const effectiveSplitPct = autoOptimize && optimizerData ? 
@@ -125,20 +118,31 @@ export default function App() {
       eligiblePeople,
       contribTaxRate: 0.15,
       outsideTaxRate: Math.max(0, Math.min(0.65, outsideTaxRate)),
-      mode: autoOptimize && optimizerData ? 'grossDeferral' as const : 'netFixed' as const
+      // Always use grossDeferral mode when autoOptimize is on, regardless of whether optimizerData exists yet
+      mode: autoOptimize ? 'grossDeferral' as const : 'netFixed' as const
     } : undefined;
     
     return {
       ...baseHousehold,
       preFireSavingsSplit
     };
-  }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings]);
+  }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings, outsideTaxRate]);
+
+  // Use the SAME household for plan-first solver to ensure consistency
+  const { data: planFirstData, loading: planFirstLoading } = usePlanFirstSolver(
+    household,  // Use same household as decision solver!
+    assumptions,
+    planSpend,
+    true
+  );
 
   // Pass the earliest age from plan-first solver to ensure consistency
+  const forceRetireAge = planSpend && planFirstData ? planFirstData.earliestAge ?? undefined : undefined;
+  console.log('Debug: forceRetireAge=', forceRetireAge, 'planFirstData=', planFirstData, 'household split=', household.preFireSavingsSplit?.toSuperPct);
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    planSpend && planFirstData ? planFirstData.earliestAge ?? undefined : undefined
+    forceRetireAge
   );
 
   return (
