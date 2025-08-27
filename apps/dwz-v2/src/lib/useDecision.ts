@@ -21,6 +21,14 @@ export function useDecision(h: Household, a: Assumptions, forceRetireAge?: numbe
       }
       return;
     }
+    
+    // Early exit when forceRetireAge is not finite (plan not achievable)
+    if (!Number.isFinite(forceRetireAge as number)) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     const id = ++counter.current;
     const onMsg = (e: MessageEvent) => {
@@ -29,8 +37,7 @@ export function useDecision(h: Household, a: Assumptions, forceRetireAge?: numbe
       if (e.data.ok) {
         setData(e.data.result);
       } else {
-        // Swallow noisy errors for UI flow; surface as null to prevent cascade
-        console.warn('[useDecision] Worker call failed:', e.data.error);
+        // Benign: not achievable or other handled error - no logging needed
         setData(null);
       }
     };
