@@ -43,7 +43,8 @@
       "Bash(git cherry-pick:*)",
       "Bash(npm -w packages/dwz-core run build)",
       "Bash(npm run:*)",
-      "Bash(pnpm --filter packages/dwz-core test)"
+      "Bash(pnpm --filter packages/dwz-core test)",
+      "Bash(pnpm --filter packages/dwz-core test plan.decision.consistency)"
     ],
     "deny": [],
     "ask": []
