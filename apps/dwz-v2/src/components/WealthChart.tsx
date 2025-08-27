@@ -1,113 +1,79 @@
-import { LineChart, Line, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer, ReferenceLine, ReferenceArea } from "recharts";
+import {
+  ResponsiveContainer, LineChart, Line, CartesianGrid, Tooltip, XAxis, YAxis,
+  ReferenceLine, ReferenceArea, Legend
+} from "recharts";
 import type { PathPoint } from "dwz-core";
 
-export default function WealthChart({ path, lifeExp, retireAge }: { path: PathPoint[]; lifeExp: number; retireAge?: number }) {
-  if (!path?.length) return null;
+type ChartRow = {
+  age: number;
+  accumulation: number | null;
+  retirement: number | null;
+  bridge: number | null;
+};
 
-  // Find bridge window for shading
-  const bridgeData = path.filter(p => p.lifecyclePhase === "bridge");
-  const bridgeStart = bridgeData[0]?.age;
-  const bridgeEnd = bridgeData[bridgeData.length - 1]?.age;
+export default function WealthChart(
+  { path, lifeExp, retireAge }: { path: PathPoint[]; lifeExp: number; retireAge?: number }
+) {
+  if (!Array.isArray(path) || path.length < 2) return null;
 
-  // Chart data with phase indicators
-  const data = path.map(p => ({ 
-    age: p.age, 
-    outside: p.outside, 
-    superBal: p.superBal, 
-    total: p.total,
-    lifecyclePhase: p.lifecyclePhase,
-    // Add markers for styling
-    isAccum: p.lifecyclePhase === "accum",
-    isRetire: p.lifecyclePhase !== "accum"
+  // Bridge window for shading
+  const bridge = path.filter(p => p.lifecyclePhase === "bridge");
+  const bridgeStart = bridge[0]?.age;
+  const bridgeEnd = bridge.length ? bridge[bridge.length - 1]?.age : undefined;
+
+  // Canonical transform -> stable keys for Recharts
+  const data: ChartRow[] = path.map(p => ({
+    age: p.age,
+    accumulation: p.lifecyclePhase === "accum"  ? p.total : null,
+    retirement:   p.lifecyclePhase === "retire" ? p.total : null,
+    bridge:       p.lifecyclePhase === "bridge" ? p.total : null
   }));
 
+  // Compute Y bounds with some headroom
+  const vals = path.map(p => p.total);
+  const minY = Math.min(0, ...vals);
+  const maxY = Math.max(...vals);
+  const pad = Math.max(1, (maxY - minY) * 0.05);
+
   return (
-    <div style={{ width: "100%", height: 360 }}>
-      <ResponsiveContainer>
-        <LineChart data={data} margin={{ top: 20, right: 20, bottom: 10, left: 0 }}>
+    <div className="w-full" style={{ minHeight: 360 }}>
+      <ResponsiveContainer width="100%" height={360}>
+        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="age" />
-          <YAxis tickFormatter={(v) => `${Math.round(v/1000)}k`} />
-          <Tooltip 
-            formatter={(v: number) => `$${v.toLocaleString()}`}
-            labelFormatter={(age) => {
-              const point = data.find(d => d.age === age);
-              const phaseLabel = point?.lifecyclePhase === "accum" ? " (Accumulating)" : 
-                                point?.lifecyclePhase === "bridge" ? " (Bridge)" : 
-                                " (Retirement)";
-              return `Age ${age}${phaseLabel}`;
-            }}
-          />
-          
+          <YAxis domain={[minY - pad, maxY + pad]} tickFormatter={(v) => `${Math.round(v/1000)}k`} />
+          <Legend />
+          <Tooltip formatter={(v: any) => (typeof v === 'number' ? `$${v.toLocaleString()}` : v)} />
+
+          {/* Series */}
+          <Line name="Accumulation" type="monotone" dataKey="accumulation" dot={false} isAnimationActive={false} stroke="#8884d8" strokeWidth={2} />
+          <Line name="Retirement" type="monotone" dataKey="retirement" dot={false} isAnimationActive={false} stroke="#82ca9d" strokeWidth={2} />
+          <Line name="Bridge Period" type="monotone" dataKey="bridge" dot={false} isAnimationActive={false} stroke="#ff7c7c" strokeWidth={2} />
+
+          {/* Retire marker */}
+          {Number.isFinite(retireAge) && (
+            <ReferenceLine 
+              x={retireAge as number} 
+              strokeDasharray="4 4" 
+              stroke="#999"
+              label={{ value: 'Retire', position: 'insideTop', offset: 6, fill: '#555' }}
+            />
+          )}
+
           {/* Bridge shading */}
-          {bridgeStart && bridgeEnd && (
-            <ReferenceArea
-              x1={bridgeStart}
-              x2={bridgeEnd + 0.99}
+          {Number.isFinite(bridgeStart) && Number.isFinite(bridgeEnd) && (
+            <ReferenceArea 
+              x1={bridgeStart as number} 
+              x2={(bridgeEnd as number) + 0.99} 
+              fillOpacity={0.12} 
               fill="#ff7c7c"
-              fillOpacity={0.15}
               label={{ value: "Bridge Period", position: "insideTopLeft" }}
             />
           )}
 
-          {/* Main wealth lines - single continuous lines with conditional styling */}
-          <Line 
-            type="monotone" 
-            dataKey="outside" 
-            dot={false} 
-            stroke="#8884d8"
-            strokeWidth={1.5}
-            connectNulls={false}
-            isAnimationActive={false}
-          />
-          <Line 
-            type="monotone" 
-            dataKey="superBal" 
-            dot={false} 
-            stroke="#82ca9d"
-            strokeWidth={1.5}
-            connectNulls={false}
-            isAnimationActive={false}
-          />
-          <Line 
-            type="monotone" 
-            dataKey="total" 
-            dot={false} 
-            strokeWidth={2}
-            stroke="#ff7c7c"
-            connectNulls={false}
-            isAnimationActive={false}
-          />
-          
-          <ReferenceLine x={lifeExp} strokeDasharray="4 4" />
-          
-          {/* Retire marker */}
-          {Number.isFinite(retireAge) && (
-            <ReferenceLine
-              x={retireAge}
-              label={{ value: 'Retire', position: 'insideTop', offset: 6, fill: '#555' }}
-              stroke="#999"
-              strokeDasharray="4 4"
-            />
-          )}
+          <ReferenceLine x={lifeExp} strokeDasharray="4 4" stroke="#ccc" />
         </LineChart>
       </ResponsiveContainer>
-      
-      {/* Legend showing phase styling */}
-      <div style={{ display: "flex", gap: "16px", justifyContent: "center", marginTop: "8px", fontSize: "12px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <div style={{ width: "20px", height: "2px", background: "#ff7c7c", borderStyle: "dashed", borderWidth: "1px 0" }}></div>
-          <span>Accumulation</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <div style={{ width: "20px", height: "2px", background: "#ff7c7c" }}></div>
-          <span>Retirement</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-          <div style={{ width: "20px", height: "8px", background: "#ff7c7c", opacity: 0.15 }}></div>
-          <span>Bridge Period</span>
-        </div>
-      </div>
     </div>
   );
 }

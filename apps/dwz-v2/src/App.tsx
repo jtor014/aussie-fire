@@ -408,8 +408,11 @@ export default function App() {
         </>
       )}
 
-      {/* Show chart only when plan exists, is achievable, AND we have solve data */}
-      {planSpend && planFirstData && planFirstData.earliestAge !== null && data && data.path && data.path.length > 1 && (
+      {/* Render chart when we have a plan, a finite earliest age, and a computed path */}
+      {planSpend != null
+        && planFirstData?.earliestAge != null
+        && Number.isFinite(planFirstData.earliestAge)
+        && data?.path?.length > 1 && (
         <WealthChart 
           path={data.path} 
           lifeExp={household.lifeExp}
