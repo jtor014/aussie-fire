@@ -104,7 +104,6 @@ export default function PersonCard({
       <Panel
         title="General info"
         subtitle="Your age and income."
-        chips={['today\'s dollars', 'end-of-year ages', 'Tax & Benefits soon']}
         help={
           <div>
             <div style={{ marginBottom: 12 }}>
@@ -150,7 +149,6 @@ export default function PersonCard({
       <Panel
         title="Assets"
         subtitle="Starting balances"
-        chips={['outside vs super', 'no contributions after FIRE', 'more assets soon']}
         help={
           <div>
             <div style={{ marginBottom: 12 }}>
