@@ -4,6 +4,7 @@ import { useDecision } from "./lib/useDecision";
 import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
 import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
+import { auMoney0 } from "./lib/format";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
 import PlanSpendInput from "./components/PlanSpendInput";
@@ -137,11 +138,13 @@ export default function App() {
   );
 
   // Pass the earliest age from plan-first solver to ensure consistency
-  const forceRetireAge = planSpend && planFirstData ? planFirstData.earliestAge ?? undefined : undefined;
+  // Only call solver if we have an achievable plan (earliest age is not null)
+  const shouldSolve = planSpend && planFirstData && planFirstData.earliestAge !== null;
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    forceRetireAge
+    shouldSolve ? planFirstData.earliestAge : undefined,
+    shouldSolve  // Pass enabled flag to prevent solver call when not achievable
   );
 
   return (
@@ -244,7 +247,7 @@ export default function App() {
                 checked={autoOptimize} 
                 onChange={e => setAutoOptimize(e.target.checked)}
               />
-              {' '}Auto-optimize {planSpend ? `for earliest age at $${planSpend.toLocaleString()}/yr` : 'for earliest retirement'}
+              {' '}Auto-optimize {planSpend ? `for earliest age at ${auMoney0(planSpend)}/yr` : 'for earliest retirement'}
             </label>
             <div style={{ fontSize: 12, color: "#666", marginTop: 4, marginBottom: 8 }}>
               This optimizer treats your savings as <strong>pre-tax salary you can direct</strong>. Outside is taxed at your marginal rate; super is taxed at 15% (concessional).
@@ -333,8 +336,13 @@ export default function App() {
           <div style={{ marginTop: 12, padding: 8, background: "#f0f8ff", borderRadius: 4 }}>
             <strong>Optimizer Result:</strong> {Math.round(optimizerData.recommendedPct * 100)}% to super 
             → {planSpend 
-                ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for $${planSpend.toLocaleString()}/yr plan`
+                ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for ${auMoney0(planSpend)}/yr plan`
                 : `retire at age ${optimizerData.earliestAge}`}
+            {optimizerData.explanation && (
+              <div style={{ fontSize: 13, color: "#555", marginTop: 6, fontStyle: "italic" }}>
+                {optimizerData.explanation}
+              </div>
+            )}
             <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
               Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
               Evaluations: {optimizerData.evals}
@@ -362,11 +370,13 @@ export default function App() {
       {planSpend && planFirstData && planFirstData.earliestAge === null && (
         <div style={{ padding: 16, borderRadius: 8, background: "#fee2e2", border: "1px solid #f87171", marginBottom: 12 }}>
           <strong style={{ fontSize: 18 }}>
-            Your plan ${planSpend.toLocaleString()}/yr is not achievable under current assumptions
+            Plan not achievable under current assumptions
           </strong>
-          <p style={{ marginTop: 8, marginBottom: 0, color: "#78716c" }}>
-            Try reducing expenses, increasing savings, or adjusting other parameters.
-          </p>
+          <ul style={{ marginTop: 8, marginLeft: 20, marginBottom: 0, color: "#78716c", fontSize: 14 }}>
+            <li>Target spend may be too high for your balances & horizon.</li>
+            <li>Bridge to preservation might be underfunded (try lower age or more outside savings).</li>
+            <li>Increase savings or reduce annual spend to test viability.</li>
+          </ul>
         </div>
       )}
 
@@ -379,15 +389,15 @@ export default function App() {
           <div style={{ padding: 12, borderRadius: 8, background: "#e8f8ef", marginBottom: 12 }}>
             <div>
               <strong>
-                At your plan $${planSpend.toLocaleString()}/yr, earliest viable age is {planFirstData.earliestAge}.
+                At your plan {auMoney0(planSpend)}/yr, earliest viable age is {planFirstData.earliestAge}.
               </strong>
               <div style={{ marginTop: 4 }}>
-                DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>${Math.round(planFirstData.atAgeSpend || data.sustainableAnnual).toLocaleString()}/yr</strong>
+                DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>{auMoney0(Math.round(planFirstData.atAgeSpend || data.sustainableAnnual))}/yr</strong>
               </div>
             </div>
             
             <div style={{ marginTop: 8 }}>
-              Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need ${Math.round(data.bridge.need).toLocaleString()} PV, have ${Math.round(data.bridge.have).toLocaleString()} for {data.bridge.years} years
+              Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need {auMoney0(Math.round(data.bridge.need))} PV, have {auMoney0(Math.round(data.bridge.have))} for {data.bridge.years} years
             </div>
             
             {household.preFireSavingsSplit && (
@@ -398,9 +408,16 @@ export default function App() {
             )}
             
           </div>
-
-          <WealthChart path={data.path} lifeExp={household.lifeExp} />
         </>
+      )}
+
+      {/* Show chart only when plan exists, is achievable, AND we have solve data */}
+      {planSpend && planFirstData && planFirstData.earliestAge !== null && data && data.path && data.path.length > 1 && (
+        <WealthChart 
+          path={data.path} 
+          lifeExp={household.lifeExp}
+          retireAge={planFirstData.earliestAge}
+        />
       )}
     </div>
   );
