@@ -36,8 +36,6 @@ export default function App() {
   const atoRates = useATORates(); // For displaying current FY info
   const [eligiblePeople, setEligiblePeople] = useState(2);
   const [outsideTaxRate, setOutsideTaxRate] = useState(0.32); // default 32% including Medicare
-  const [preferSuperTieBreak, setPreferSuperTieBreak] = useState(true);
-  const [ageToleranceYears, setAgeToleranceYears] = useState(0);
   
   // Plan-first solver with default
   const [planSpend, setPlanSpend] = useState<number | null>(null);
@@ -77,10 +75,8 @@ export default function App() {
   const optimizerOpts = useMemo(() => ({
     gridPoints: 21,
     refineIters: 2, 
-    window: 0.15,
-    preferSuperTieBreak: preferSuperTieBreak,
-    ageToleranceYears: Math.max(0, Math.min(5, ageToleranceYears))
-  }), [preferSuperTieBreak, ageToleranceYears]);
+    window: 0.15
+  }), []);
 
   // Create a basic household for the optimizer (without savings split)
   const baseHousehold = useMemo<Household>(() => ({
@@ -169,7 +165,7 @@ export default function App() {
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    shouldSolve ? planFirstData.earliestAge : undefined,
+    shouldSolve && planFirstData.earliestAge !== null ? planFirstData.earliestAge : undefined,
     shouldSolve  // Pass enabled flag to prevent solver call when not achievable
   );
 
@@ -372,34 +368,15 @@ export default function App() {
                 <option value={2}>2 (couple)</option>
               </select>
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
-              <input 
-                type="checkbox" 
-                checked={preferSuperTieBreak} 
-                onChange={e => setPreferSuperTieBreak(e.target.checked)}
-              />
-              Prefer super when start age is the same
-            </label>
-            <label style={{ display: 'block', marginTop: 8, fontSize: 13 }}>
-              Tolerance (years):
-              <input 
-                type="number" 
-                min="0" 
-                max="5" 
-                step="0.5"
-                value={ageToleranceYears} 
-                onChange={e => setAgeToleranceYears(Math.max(0, Math.min(5, +e.target.value || 0)))}
-                style={{
-                  width: '60px',
-                  padding: '4px 6px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 4,
-                  fontSize: 13,
-                  marginLeft: 8
-                }}
-                title="How many years of delay are acceptable while still preferring super"
-              />
-            </label>
+            <div style={{ marginTop: 12, padding: 8, background: '#f8f9fa', border: '1px solid #e9ecef', borderRadius: 6 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4, color: '#495057' }}>
+                Optimizer Policy:
+              </div>
+              <div style={{ fontSize: 12, color: '#6c757d', lineHeight: 1.4 }}>
+                <strong>Maximize salary-sacrifice to concessional caps</strong> unless that would push your earliest viable age later. 
+                If bridge needs outside funds, we allocate just enough outside and put the rest to super.
+              </div>
+            </div>
           </div>
         </div>
         
@@ -410,7 +387,7 @@ export default function App() {
             → {planSpend 
                 ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for ${auMoney0(planSpend)}/yr plan`
                 : `retire at age ${optimizerData.earliestAge}`}
-            {optimizerData.explanation && (
+            {optimizerData && 'explanation' in optimizerData && optimizerData.explanation && (
               <div style={{ fontSize: 13, color: "#555", marginTop: 6, fontStyle: "italic" }}>
                 {optimizerData.explanation}
               </div>
