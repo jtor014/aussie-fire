@@ -4,6 +4,7 @@ import { useDecision } from "./lib/useDecision";
 import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
 import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
+import { useConcessionalCap, useATORates } from "./lib/useATORates";
 import { auMoney0 } from "./lib/format";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
@@ -27,7 +28,8 @@ export default function App() {
   // Savings split optimization
   const [autoOptimize, setAutoOptimize] = useState(true);
   const [manualSplitPct, setManualSplitPct] = useState(0.5);
-  const [capPerPerson, setCapPerPerson] = useState(30000);
+  const capPerPerson = useConcessionalCap(); // ATO-derived, no user override
+  const atoRates = useATORates(); // For displaying current FY info
   const [eligiblePeople, setEligiblePeople] = useState(2);
   const [outsideTaxRate, setOutsideTaxRate] = useState(0.32); // default 32% including Medicare
   const [preferSuperTieBreak, setPreferSuperTieBreak] = useState(true);
@@ -287,13 +289,12 @@ export default function App() {
             )}
           </div>
           <div>
-            <label>Concessional cap per person: 
-              <input 
-                type="number" 
-                value={capPerPerson} 
-                onChange={e => setCapPerPerson(+e.target.value)}
-              />
-            </label><br/>
+            <div style={{ marginBottom: 8 }}>
+              <span style={{ color: '#666', fontSize: '14px' }}>
+                Concessional cap per person (ATO FY {atoRates.financialYear}): 
+                <strong style={{ color: '#000' }}> {auMoney0(capPerPerson)}</strong>
+              </span>
+            </div>
             <label>Eligible people: 
               <select value={eligiblePeople} onChange={e => setEligiblePeople(+e.target.value)}>
                 <option value={1}>1 (single)</option>
