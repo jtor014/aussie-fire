@@ -93,7 +93,8 @@ export default function App() {
       superBal: sup1, 
       preserveAge: 60, 
       superPrem: 0,
-      salary: salary1,
+      // Salary now mirrors the Income field
+      salary: Math.max(0, Number(income1 ?? 0)),
       sgRate: sgRate1 || atoRates.superGuaranteeRate
     },
     p2: { 
@@ -103,13 +104,14 @@ export default function App() {
       superBal: sup2, 
       preserveAge: 60, 
       superPrem: 0,
-      salary: salary2,
+      // Salary now mirrors the Income field
+      salary: Math.max(0, Number(income2 ?? 0)),
       sgRate: sgRate2 || atoRates.superGuaranteeRate
     },
     targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
     annualSavings,
     lifeExp
-  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, salary1, salary2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate]);
+  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate]);
   
   // Use plan-first optimizer when plan is set, otherwise fall back to generic optimizer
   const { data: genericOptimizerData, loading: genericOptimizerLoading } = useSavingsSplitOptimizer(
@@ -197,13 +199,13 @@ export default function App() {
           income={income1}
           outside={out1}
           super={sup1}
-          salary={salary1}
+          salary={income1}
           sgRate={sgRate1}
           onAgeChange={setP1Age}
           onIncomeChange={setIncome1}
           onOutsideChange={setOut1}
           onSuperChange={setSup1}
-          onSalaryChange={setSalary1}
+          onSalaryChange={setIncome1}
           onSGRateChange={setSgRate1}
           atoSGRate={atoRates.superGuaranteeRate}
           capPerPerson={capPerPerson}
@@ -219,13 +221,13 @@ export default function App() {
           income={income2}
           outside={out2}
           super={sup2}
-          salary={salary2}
+          salary={income2}
           sgRate={sgRate2}
           onAgeChange={setP2Age}
           onIncomeChange={setIncome2}
           onOutsideChange={setOut2}
           onSuperChange={setSup2}
-          onSalaryChange={setSalary2}
+          onSalaryChange={setIncome2}
           onSGRateChange={setSgRate2}
           atoSGRate={atoRates.superGuaranteeRate}
           capPerPerson={capPerPerson}

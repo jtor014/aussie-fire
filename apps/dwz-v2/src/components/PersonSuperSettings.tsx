@@ -4,11 +4,11 @@ import { splitSalarySacrifice } from '../lib/suggestSalarySacrifice';
 
 interface PersonSuperSettingsProps {
   index: number;
-  salary: number;
+  salary: number; // Now represents income (read-only display)
   sgRate: number; // 0 means using ATO default
   atoSGRate: number; // Current ATO SG rate
   capPerPerson: number;
-  onSalaryChange: (value: number) => void;
+  onSalaryChange: (value: number) => void; // This is now redundant but kept for compatibility
   onSGRateChange: (value: number) => void;
   // Optimizer data
   autoOptimize: boolean;
@@ -78,27 +78,13 @@ export default function PersonSuperSettings({
         gap: 12,
         fontSize: 13
       }}>
-        <label style={{
-          display: 'block',
-          color: '#6b7280'
-        }}>
-          Salary (gross, A$)
-          <input 
-            type="number" 
-            step="1000"
-            value={salary || ''} 
-            onChange={e => onSalaryChange(Math.max(0, Number(e.target.value) || 0))}
-            style={{
-              width: '100%',
-              padding: '4px 8px',
-              border: '1px solid #d1d5db',
-              borderRadius: 6,
-              fontSize: 13,
-              marginTop: 4
-            }}
-            placeholder="0"
-          />
-        </label>
+        <div>
+          <div style={{ color: '#6b7280', fontSize: 12 }}>Salary (from Income)</div>
+          <div style={{ fontWeight: 600, marginTop: 2 }}>{auMoney0(salary)}</div>
+          <div style={{ color: '#9ca3af', fontSize: 11, marginTop: 2 }}>
+            This mirrors the Income field above.
+          </div>
+        </div>
         
         <label style={{
           display: 'block',
