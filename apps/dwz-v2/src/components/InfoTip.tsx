@@ -1,14 +1,29 @@
 import React from 'react';
 
 export default function InfoTip({ children }: { children: React.ReactNode }) {
+  const summaryStyle: React.CSSProperties = {
+    display: 'inline-block',
+    marginLeft: 8,
+    cursor: 'pointer',
+    fontSize: 12,
+    color: '#1D4ED8', // blue-700
+    userSelect: 'none',
+  };
+  const boxStyle: React.CSSProperties = {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#374151',
+    background: '#ffffff',
+    border: '1px solid #E5E7EB',
+    borderRadius: 6,
+    padding: 8,
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    maxWidth: '65ch',
+  };
   return (
-    <details className="inline-block ml-2 align-middle">
-      <summary className="cursor-pointer text-xs text-blue-700 hover:underline select-none">
-        Learn more
-      </summary>
-      <div className="mt-1 text-xs text-gray-700 bg-white border rounded p-2 shadow-sm max-w-prose">
-        {children}
-      </div>
+    <details style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <summary style={summaryStyle}>Learn more</summary>
+      <div style={boxStyle}>{children}</div>
     </details>
   );
 }
