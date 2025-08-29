@@ -177,13 +177,16 @@ export default function App() {
   const remainingCaps = useMemo(() => {
     const effectiveSGRate1 = sgRate1 || atoRates.superGuaranteeRate;
     const effectiveSGRate2 = sgRate2 || atoRates.superGuaranteeRate;
-    const sgGross1 = Math.max(0, Math.round(salary1 * effectiveSGRate1));
-    const sgGross2 = Math.max(0, Math.round(salary2 * effectiveSGRate2));
+    // Salary now derived from income (same as engine uses)
+    const effectiveSalary1 = Math.max(0, Number(income1 ?? 0));
+    const effectiveSalary2 = Math.max(0, Number(income2 ?? 0));
+    const sgGross1 = Math.max(0, Math.round(effectiveSalary1 * effectiveSGRate1));
+    const sgGross2 = Math.max(0, Math.round(effectiveSalary2 * effectiveSGRate2));
     return [
       Math.max(0, capPerPerson - sgGross1),
       Math.max(0, capPerPerson - sgGross2)
     ];
-  }, [salary1, salary2, sgRate1, sgRate2, capPerPerson, atoRates.superGuaranteeRate]);
+  }, [income1, income2, sgRate1, sgRate2, capPerPerson, atoRates.superGuaranteeRate]);
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
