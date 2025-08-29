@@ -83,14 +83,34 @@ export default function PersonCard({
   };
 
 
+  const enhancedCardStyle: React.CSSProperties = {
+    ...cardStyle,
+    background: 'linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%)',
+    border: '2px solid #E2E8F0',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+  };
+
+  const sectionDividerStyle: React.CSSProperties = {
+    height: 1,
+    background: 'linear-gradient(90deg, transparent 0%, #E2E8F0 50%, transparent 100%)',
+    margin: '20px 0',
+  };
+
   return (
-    <div style={cardStyle} className="space-y-4">
+    <div style={enhancedCardStyle} className="space-y-4">
       <h3 style={titleStyle}>{title}</h3>
 
       {/* 1) General info */}
       <Panel
         title="General info"
-        subtitle="Your age and income. Tax & Benefits panel sits here (coming soon)."
+        subtitle="Your age and income."
+        chips={['today\'s dollars', 'end-of-year ages', 'Tax & Benefits soon']}
+        help={
+          <span>
+            Figures are net real (inflation-adjusted). We advance age at end of year after spend → returns/fees. 
+            A Tax &amp; Benefits panel (e.g., HECS/HELP, rebates, MLS) will live here.
+          </span>
+        }
       >
         <div className="col-span-1">
           <label style={labelStyle}>
@@ -114,17 +134,20 @@ export default function PersonCard({
             />
           </label>
         </div>
-        <div className="col-span-2">
-          <div className="mt-1 text-xs text-gray-500 border rounded px-2 py-1 bg-gray-50">
-            Tax &amp; Benefits panel (coming soon)
-          </div>
-        </div>
       </Panel>
 
       {/* 2) Assets */}
       <Panel
         title="Assets"
-        subtitle="Starting balances. Extendable later for other assets / lump sums."
+        subtitle="Starting balances"
+        chips={['outside vs super', 'no contributions after FIRE', 'more assets soon']}
+        help={
+          <span>
+            We track two buckets for withdrawals and tax: outside and super. 
+            After retirement (FIRE), contributions stop by design (DWZ). 
+            We'll add other assets and one-off lump sums here later.
+          </span>
+        }
       >
         <div className="col-span-1">
           <label style={labelStyle}>
@@ -149,6 +172,9 @@ export default function PersonCard({
           </label>
         </div>
       </Panel>
+
+      {/* Visual divider */}
+      <div style={sectionDividerStyle}></div>
 
       {/* 3) Super settings (already implemented) */}
       <PersonSuperSettings

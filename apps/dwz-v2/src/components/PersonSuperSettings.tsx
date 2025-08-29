@@ -46,20 +46,29 @@ export default function PersonSuperSettings({
   const splitRecommendations = splitSalarySacrifice(householdRecommendedGross, allRemainingCaps);
   const recommendedForThisPerson = splitRecommendations[index] || 0;
 
+  const containerStyle: React.CSSProperties = {
+    marginTop: 0,
+    padding: 16,
+    borderRadius: 12,
+    border: '2px solid #E5E7EB',
+    background: 'linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    transition: 'all 0.2s ease',
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontWeight: 600,
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottom: '1px solid #F3F4F6',
+    fontSize: 15,
+    color: '#111827',
+    letterSpacing: '0.025em',
+  };
+
   return (
-    <div style={{
-      marginTop: 16,
-      padding: 12,
-      borderRadius: 12,
-      border: '1px solid #e5e7eb',
-      backgroundColor: '#ffffff'
-    }}>
-      <div style={{ 
-        fontWeight: 500, 
-        marginBottom: 12,
-        fontSize: 14,
-        color: '#374151'
-      }}>
+    <div style={containerStyle}>
+      <div style={titleStyle}>
         Super Settings
       </div>
       
