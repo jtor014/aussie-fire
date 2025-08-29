@@ -138,11 +138,13 @@ export default function App() {
   );
 
   // Pass the earliest age from plan-first solver to ensure consistency
-  const forceRetireAge = planSpend && planFirstData ? planFirstData.earliestAge ?? undefined : undefined;
+  // Only call solver if we have an achievable plan (earliest age is not null)
+  const shouldSolve = planSpend && planFirstData && planFirstData.earliestAge !== null;
   const { data, loading } = useDecision(
     household, 
     assumptions, 
-    forceRetireAge
+    shouldSolve ? planFirstData.earliestAge : undefined,
+    shouldSolve  // Pass enabled flag to prevent solver call when not achievable
   );
 
   return (
@@ -336,6 +338,11 @@ export default function App() {
             → {planSpend 
                 ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for ${auMoney0(planSpend)}/yr plan`
                 : `retire at age ${optimizerData.earliestAge}`}
+            {optimizerData.explanation && (
+              <div style={{ fontSize: 13, color: "#555", marginTop: 6, fontStyle: "italic" }}>
+                {optimizerData.explanation}
+              </div>
+            )}
             <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
               Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
               Evaluations: {optimizerData.evals}
@@ -363,11 +370,13 @@ export default function App() {
       {planSpend && planFirstData && planFirstData.earliestAge === null && (
         <div style={{ padding: 16, borderRadius: 8, background: "#fee2e2", border: "1px solid #f87171", marginBottom: 12 }}>
           <strong style={{ fontSize: 18 }}>
-            Your plan {auMoney0(planSpend)}/yr is not achievable under current assumptions
+            Plan not achievable under current assumptions
           </strong>
-          <p style={{ marginTop: 8, marginBottom: 0, color: "#78716c" }}>
-            Try reducing expenses, increasing savings, or adjusting other parameters.
-          </p>
+          <ul style={{ marginTop: 8, marginLeft: 20, marginBottom: 0, color: "#78716c", fontSize: 14 }}>
+            <li>Target spend may be too high for your balances & horizon.</li>
+            <li>Bridge to preservation might be underfunded (try lower age or more outside savings).</li>
+            <li>Increase savings or reduce annual spend to test viability.</li>
+          </ul>
         </div>
       )}
 
@@ -399,9 +408,16 @@ export default function App() {
             )}
             
           </div>
-
-          <WealthChart path={data.path} lifeExp={household.lifeExp} />
         </>
+      )}
+
+      {/* Show chart only when plan exists, is achievable, AND we have solve data */}
+      {planSpend && planFirstData && planFirstData.earliestAge !== null && data && data.path && data.path.length > 1 && (
+        <WealthChart 
+          path={data.path} 
+          lifeExp={household.lifeExp}
+          retireAge={planFirstData.earliestAge}
+        />
       )}
     </div>
   );

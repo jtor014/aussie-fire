@@ -122,6 +122,20 @@ function round4(x: number) { return Math.round(x * 1e4) / 1e4; }
 export interface SavingsSplitForPlanResult extends SavingsSplitResult {
   objective: 'earliestAgeForPlan';
   plan: number;
+  /**
+   * Human-readable reason for the recommended split (no UI logic needed).
+   * Examples:
+   *  - "Age unchanged at 53. Preferring 30%→super for +$18,200 boundary wealth."
+   *  - "Any super delays earliest age by 1.2y (tolerance 0). Keeping 0%."
+   */
+  explanation?: string;
+  meta?: {
+    targetAge: number;
+    baselinePct: number;
+    boundaryWealthChosen?: number;
+    boundaryWealthBaseline?: number;
+    usedTieBreak?: boolean;
+  };
 }
 
 export function optimizeSavingsSplitForPlan(
@@ -261,6 +275,25 @@ export function optimizeSavingsSplitForPlan(
 
   // --- Tie-break among solutions within tolerance of best earliestAge ---
   let chosenPct = bestPct;
+  let boundaryWealthChosen: number | undefined;
+  let boundaryWealthBaseline: number | undefined;
+  
+  // Helper function to calculate boundary wealth at a given split and age
+  const boundaryWealthAt = (pct: number, age: number) => {
+    const at = accumulateUntil({
+      ...baseInput,
+      preFireSavingsSplit: {
+        toSuperPct: pct,
+        capPerPerson: policy.capPerPerson,
+        eligiblePeople: policy.eligiblePeople,
+        contribTaxRate,
+        outsideTaxRate: policy.outsideTaxRate,
+        mode: 'grossDeferral'
+      }
+    }, age - 1);  // Use retirement boundary (last accumulation point)
+    return at.outside + at.super;
+  };
+  
   if (tieBreak && Number.isFinite(bestEval.earliestAge!)) {
     const targetAge = bestEval.earliestAge as number;
     // Collect candidate pcts already evaluated within tolerance
@@ -268,23 +301,14 @@ export function optimizeSavingsSplitForPlan(
     memo.forEach((v, k) => {
       if (v.earliestAge != null && (v.earliestAge as number) <= targetAge + tol + 1e-9) cands.push(k);
     });
-    // For each candidate, evaluate total wealth at the start of retirement at targetAge
+    // For each candidate, evaluate total wealth at the retirement boundary
     let bestWealth = -Infinity;
     for (const p of cands) {
-      const at = accumulateUntil({
-        ...baseInput,
-        preFireSavingsSplit: {
-          toSuperPct: p,
-          capPerPerson: policy.capPerPerson,
-          eligiblePeople: policy.eligiblePeople,
-          contribTaxRate,
-          outsideTaxRate: policy.outsideTaxRate,
-          mode: 'grossDeferral'
-        }
-      }, targetAge);
-      const w = at.outside + at.super;
+      const w = boundaryWealthAt(p, targetAge);
       if (w > bestWealth) { bestWealth = w; chosenPct = p; }
     }
+    boundaryWealthChosen = bestWealth;
+    boundaryWealthBaseline = boundaryWealthAt(bestPct, targetAge);
   }
 
   // Sensitivity analysis - ensure we get 5 distinct points
@@ -325,6 +349,20 @@ export function optimizeSavingsSplitForPlan(
 
   const capBindingAtOpt = (baseInput.annualSavings * chosenPct) > (policy.capPerPerson * policy.eligiblePeople + 1e-9);
 
+  // Build a concise explanation string for the UI
+  let explanation = '';
+  const ageTxt = (bestEval.earliestAge ?? NaN).toString();
+  if (Number.isFinite(bestEval.earliestAge ?? NaN)) {
+    if (chosenPct !== bestPct && boundaryWealthChosen != null && boundaryWealthBaseline != null) {
+      const delta = Math.round(boundaryWealthChosen - boundaryWealthBaseline);
+      explanation = `Age unchanged at ${ageTxt}. Preferring ${(chosenPct*100).toFixed(0)}%→super for ${delta >= 0 ? '+' : ''}$${Math.abs(delta).toLocaleString()} boundary wealth.`;
+    } else if (chosenPct === 0) {
+      explanation = `Any super delays earliest age beyond ${ageTxt}; keeping ${(chosenPct*100).toFixed(0)}% within tolerance.`;
+    } else {
+      explanation = `Optimal split ${(chosenPct*100).toFixed(0)}%→super achieves earliest age ${ageTxt}.`;
+    }
+  }
+
   return {
     objective: 'earliestAgeForPlan',
     plan,
@@ -333,6 +371,14 @@ export function optimizeSavingsSplitForPlan(
     dwzSpend: bestEval.atAgeSpend ?? 0,
     sensitivity,
     constraints: { ...bestEval.constraints, capBindingAtOpt },
-    evals
+    evals,
+    explanation,
+    meta: {
+      targetAge: bestEval.earliestAge ?? NaN,
+      baselinePct: bestPct,
+      boundaryWealthChosen,
+      boundaryWealthBaseline,
+      usedTieBreak: chosenPct !== bestPct
+    }
   };
 }
