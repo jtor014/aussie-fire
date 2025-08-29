@@ -90,7 +90,13 @@ export default function PersonCard({
       {/* 1) General info */}
       <Panel
         title="General info"
-        subtitle="Your age and income. Tax & Benefits panel sits here (coming soon)."
+        subtitle="Your age and income."
+        definition={
+          <span>
+            All figures are in <strong>today's dollars</strong>. Ages update at end of year (spend → grow → advance age).
+            A dedicated <em>Tax &amp; Benefits</em> panel (HECS/HELP, rebates, MLS) will sit here soon.
+          </span>
+        }
       >
         <div className="col-span-1">
           <label style={labelStyle}>
@@ -114,17 +120,18 @@ export default function PersonCard({
             />
           </label>
         </div>
-        <div className="col-span-2">
-          <div className="mt-1 text-xs text-gray-500 border rounded px-2 py-1 bg-gray-50">
-            Tax &amp; Benefits panel (coming soon)
-          </div>
-        </div>
       </Panel>
 
       {/* 2) Assets */}
       <Panel
         title="Assets"
-        subtitle="Starting balances. Extendable later for other assets / lump sums."
+        subtitle="Starting balances"
+        definition={
+          <span>
+            Balances are tracked as <strong>outside</strong> vs <strong>super</strong>. No contributions occur after FIRE
+            (DWZ invariant). We'll add other asset types &amp; lump sums here in a future update.
+          </span>
+        }
       >
         <div className="col-span-1">
           <label style={labelStyle}>
