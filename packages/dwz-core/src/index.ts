@@ -4,6 +4,8 @@ export * from "./solver.js";
 export { optimizeSavingsSplit, optimizeSavingsSplitForPlan } from "./optimizer/savingsSplit.js";
 export type { SavingsSplitForPlanResult } from "./optimizer/savingsSplit.js";
 export { findEarliestAgeForPlan } from "./planning/earliestForPlan.js";
+export { allocateConcessionalByMTR } from "./optimizer/allocateConcessional.js";
+export type { PersonHeadroom, AllocationResult } from "./optimizer/allocateConcessional.js";
 
 const EPS = 1;
 const clampRate = (r: number) => Math.max(-0.99, r);

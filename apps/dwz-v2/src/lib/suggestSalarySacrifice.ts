@@ -1,16 +1,32 @@
-/** Distribute household recommended salary-sacrifice (gross) across people by remaining cap.
- * Greedy fill: allocate to person 0..n up to their remaining cap until the budget is exhausted.
+import { allocateConcessionalByMTR, type PersonHeadroom } from 'dwz-core';
+
+/** 
+ * Distribute household recommended salary-sacrifice (gross) across people.
+ * Uses MTR-priority allocation: highest MTR first, then pro-rata by remaining cap.
+ * 
+ * @param totalRecommendedGross - Total salary sacrifice to allocate (gross)
+ * @param remainingCaps - Array of remaining concessional cap per person
+ * @param mtrs - Array of marginal tax rates per person (optional, defaults to equal)
+ * @returns Array of recommended salary sacrifice per person
  */
 export function splitSalarySacrifice(
   totalRecommendedGross: number,
-  remainingCaps: number[]
+  remainingCaps: number[],
+  mtrs?: number[]
 ): number[] {
-  const out = remainingCaps.map(() => 0);
-  let remaining = Math.max(0, totalRecommendedGross);
-  for (let i = 0; i < remainingCaps.length && remaining > 0; i++) {
-    const take = Math.min(remainingCaps[i], remaining);
-    out[i] = Math.max(0, Math.round(take));
-    remaining -= take;
-  }
-  return out;
+  // Build PersonHeadroom array for the allocator
+  const people: PersonHeadroom[] = remainingCaps.map((cap, i) => ({
+    id: i,
+    headroom: Math.max(0, cap),
+    mtr: mtrs?.[i] ?? 0.32 // Default to 32% if MTR not provided
+  }));
+  
+  // Use the MTR-aware allocator
+  const result = allocateConcessionalByMTR(totalRecommendedGross, people);
+  
+  // Extract the per-person allocations in order
+  return remainingCaps.map((_, i) => {
+    const person = result.perPerson.find(p => p.id === i);
+    return Math.round(person?.ssGross ?? 0);
+  });
 }

@@ -23,6 +23,7 @@ interface PersonCardProps {
   optimizerData?: { recommendedPct: number } | null;
   annualSavings: number;
   allRemainingCaps: number[];
+  personalMTRs: number[];
 }
 
 export default function PersonCard({
@@ -44,7 +45,8 @@ export default function PersonCard({
   autoOptimize,
   optimizerData,
   annualSavings,
-  allRemainingCaps
+  allRemainingCaps,
+  personalMTRs
 }: PersonCardProps) {
   const cardStyle: React.CSSProperties = {
     border: '1px solid #e5e7eb',
@@ -203,6 +205,7 @@ export default function PersonCard({
         optimizerData={optimizerData}
         annualSavings={annualSavings}
         allRemainingCaps={allRemainingCaps}
+        personalMTRs={personalMTRs}
       />
     </div>
   );

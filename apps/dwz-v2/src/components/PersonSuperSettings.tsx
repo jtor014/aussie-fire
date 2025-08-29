@@ -15,6 +15,7 @@ interface PersonSuperSettingsProps {
   annualSavings: number;
   // For splitting recommendation across people
   allRemainingCaps: number[];
+  personalMTRs: number[];
 }
 
 export default function PersonSuperSettings({
@@ -27,7 +28,8 @@ export default function PersonSuperSettings({
   autoOptimize,
   optimizerData,
   annualSavings,
-  allRemainingCaps
+  allRemainingCaps,
+  personalMTRs
 }: PersonSuperSettingsProps) {
   
   // Calculate derived values
@@ -41,7 +43,7 @@ export default function PersonSuperSettings({
     ? Math.max(0, Math.round(annualSavings * optimizerData.recommendedPct))
     : 0;
     
-  const splitRecommendations = splitSalarySacrifice(householdRecommendedGross, allRemainingCaps);
+  const splitRecommendations = splitSalarySacrifice(householdRecommendedGross, allRemainingCaps, personalMTRs);
   const recommendedForThisPerson = splitRecommendations[index] || 0;
 
   const containerStyle: React.CSSProperties = {

@@ -5,6 +5,7 @@ import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
 import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
 import { useConcessionalCap, useATORates, useAutoMarginalTaxRate } from "./lib/useATORates";
+import { calculateMarginalTaxRate } from "./lib/auRates";
 import { auMoney0 } from "./lib/format";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
@@ -187,8 +188,8 @@ export default function App() {
     shouldSolve  // Pass enabled flag to prevent solver call when not achievable
   );
 
-  // Calculate remaining caps for both people (for optimizer suggestion splitting)
-  const remainingCaps = useMemo(() => {
+  // Calculate remaining caps and per-person MTRs for optimizer suggestion splitting
+  const { remainingCaps, personalMTRs } = useMemo(() => {
     const effectiveSGRate1 = sgRate1 || atoRates.superGuaranteeRate;
     const effectiveSGRate2 = sgRate2 || atoRates.superGuaranteeRate;
     // Salary now derived from income (same as engine uses)
@@ -196,11 +197,22 @@ export default function App() {
     const effectiveSalary2 = Math.max(0, Number(income2 ?? 0));
     const sgGross1 = Math.max(0, Math.round(effectiveSalary1 * effectiveSGRate1));
     const sgGross2 = Math.max(0, Math.round(effectiveSalary2 * effectiveSGRate2));
-    return [
+    
+    const caps = [
       Math.max(0, capPerPerson - sgGross1),
       Math.max(0, capPerPerson - sgGross2)
     ];
-  }, [income1, income2, sgRate1, sgRate2, capPerPerson, atoRates.superGuaranteeRate]);
+    
+    // Calculate per-person MTRs (use advanced override if set, otherwise auto)
+    const mtrs = useAdvancedTaxRate 
+      ? [manualTaxRate, manualTaxRate] // Use manual rate for both if override is set
+      : [
+          calculateMarginalTaxRate(income1, atoRates.taxBrackets),
+          calculateMarginalTaxRate(income2, atoRates.taxBrackets)
+        ];
+    
+    return { remainingCaps: caps, personalMTRs: mtrs };
+  }, [income1, income2, sgRate1, sgRate2, capPerPerson, atoRates.superGuaranteeRate, atoRates.taxBrackets, useAdvancedTaxRate, manualTaxRate]);
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
@@ -227,6 +239,7 @@ export default function App() {
           optimizerData={optimizerData}
           annualSavings={annualSavings}
           allRemainingCaps={remainingCaps}
+          personalMTRs={personalMTRs}
         />
         <PersonCard
           title="Partner"
@@ -248,6 +261,7 @@ export default function App() {
           optimizerData={optimizerData}
           annualSavings={annualSavings}
           allRemainingCaps={remainingCaps}
+          personalMTRs={personalMTRs}
         />
       </section>
 
