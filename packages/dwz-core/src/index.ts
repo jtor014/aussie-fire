@@ -27,7 +27,9 @@ const agg = (h: Household) => {
   const prem     = (h.p1.superPrem ?? 0) + (h.p2?.superPrem ?? 0);
   const income   = (h.p1.income) + (h.p2?.income ?? 0);
   const save     = h.annualSavings ?? 0; // NEW
-  return { preserveAge, startAge, outside0, super0, prem, income, save };
+  // Calculate combined employer SG gross
+  const sgGross  = ((h.p1.salary ?? 0) * (h.p1.sgRate ?? 0)) + ((h.p2?.salary ?? 0) * (h.p2?.sgRate ?? 0));
+  return { preserveAge, startAge, outside0, super0, prem, income, save, sgGross };
 };
 
 const grow = (bal: number, realReturn: number, fees: number) =>
@@ -39,7 +41,7 @@ function accumulateUntil(
   a: Assumptions,
   retireAge: number
 ) {
-  const { startAge, outside0, super0, prem, save } = agg(h);
+  const { startAge, outside0, super0, prem, save, sgGross } = agg(h);
   const rnet = clampRate(a.realReturn - a.fees);
 
   let outside = outside0;
@@ -51,6 +53,12 @@ function accumulateUntil(
 
     // simple DMZ: put the whole savings budget outside (T-R2 will optimize split)
     outside += save;
+    
+    // Add employer SG net (after 15% contrib tax) to super during accumulation
+    if (sgGross > 0) {
+      const sgNet = Math.round(sgGross * (1 - 0.15) * 100) / 100;
+      superBal += sgNet;
+    }
 
     // grow after contributions/premiums
     outside = grow(Math.max(0, outside), a.realReturn, a.fees);
