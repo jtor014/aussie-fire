@@ -104,12 +104,21 @@ export default function PersonCard({
       <Panel
         title="General info"
         subtitle="Your age and income."
-        chips={['today\'s dollars', 'end-of-year ages', 'Tax & Benefits soon']}
         help={
-          <span>
-            Figures are net real (inflation-adjusted). We advance age at end of year after spend → returns/fees. 
-            A Tax &amp; Benefits panel (e.g., HECS/HELP, rebates, MLS) will live here.
-          </span>
+          <div>
+            <div style={{ marginBottom: 12 }}>
+              <strong>Key concepts explained:</strong>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <strong>• Today's dollars:</strong> All figures are net real (inflation-adjusted). This means values represent purchasing power in today's terms, making it easier to understand what your money will be worth.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <strong>• End-of-year ages:</strong> We advance age at the end of each year after spend → returns/fees cycle. This timing affects when you can access super preservation age benefits.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <strong>• Tax & Benefits soon:</strong> A dedicated panel for HECS/HELP debt, private health insurance rebates, Medicare Levy Surcharge (MLS), and other tax considerations will be added here. This will enable more precise tax calculations and optimization.
+            </div>
+          </div>
         }
       >
         <div className="col-span-1">
@@ -140,13 +149,21 @@ export default function PersonCard({
       <Panel
         title="Assets"
         subtitle="Starting balances"
-        chips={['outside vs super', 'no contributions after FIRE', 'more assets soon']}
         help={
-          <span>
-            We track two buckets for withdrawals and tax: outside and super. 
-            After retirement (FIRE), contributions stop by design (DWZ). 
-            We'll add other assets and one-off lump sums here later.
-          </span>
+          <div>
+            <div style={{ marginBottom: 12 }}>
+              <strong>Asset management concepts:</strong>
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <strong>• Outside vs super:</strong> We track two main asset buckets for different withdrawal strategies and tax implications. Outside assets can be accessed anytime, while super has preservation age restrictions but tax advantages.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <strong>• No contributions after FIRE:</strong> This follows the Die-With-Zero (DWZ) methodology - once you achieve Financial Independence, contributions stop by design. The focus shifts to optimal withdrawal strategies rather than accumulation.
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <strong>• More assets soon:</strong> Future updates will include other asset types (property, bonds, international shares) and one-off lump sums (inheritance, bonuses, asset sales) to provide more comprehensive portfolio modeling.
+            </div>
+          </div>
         }
       >
         <div className="col-span-1">
