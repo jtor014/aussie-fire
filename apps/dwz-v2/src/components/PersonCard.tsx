@@ -9,13 +9,12 @@ interface PersonCardProps {
   income: number;
   outside: number;
   super: number;
-  salary: number;
+  salary: number; // Now mirrors income (read-only in Super Settings)
   sgRate: number;
   onAgeChange: (value: number) => void;
   onIncomeChange: (value: number) => void;
   onOutsideChange: (value: number) => void;
   onSuperChange: (value: number) => void;
-  onSalaryChange: (value: number) => void;
   onSGRateChange: (value: number) => void;
   // Super Settings data
   atoSGRate: number;
@@ -39,7 +38,6 @@ export default function PersonCard({
   onIncomeChange,
   onOutsideChange,
   onSuperChange,
-  onSalaryChange,
   onSGRateChange,
   atoSGRate,
   capPerPerson,
@@ -200,7 +198,6 @@ export default function PersonCard({
         sgRate={sgRate}
         atoSGRate={atoSGRate}
         capPerPerson={capPerPerson}
-        onSalaryChange={onSalaryChange}
         onSGRateChange={onSGRateChange}
         autoOptimize={autoOptimize}
         optimizerData={optimizerData}

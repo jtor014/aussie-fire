@@ -25,9 +25,7 @@ export default function App() {
   const [annualSavings, setAnnualSavings] = useState(50000);
   const [lifeExp, setLifeExp] = useState(90);
   
-  // Salary and SG rate for super guarantee calculations
-  const [salary1, setSalary1] = useState(0);
-  const [salary2, setSalary2] = useState(0);
+  // SG rate for super guarantee calculations (salary now derived from income)
   const [sgRate1, setSgRate1] = useState(0); // 0 means use ATO default
   const [sgRate2, setSgRate2] = useState(0); // 0 means use ATO default
   
@@ -179,13 +177,16 @@ export default function App() {
   const remainingCaps = useMemo(() => {
     const effectiveSGRate1 = sgRate1 || atoRates.superGuaranteeRate;
     const effectiveSGRate2 = sgRate2 || atoRates.superGuaranteeRate;
-    const sgGross1 = Math.max(0, Math.round(salary1 * effectiveSGRate1));
-    const sgGross2 = Math.max(0, Math.round(salary2 * effectiveSGRate2));
+    // Salary now derived from income (same as engine uses)
+    const effectiveSalary1 = Math.max(0, Number(income1 ?? 0));
+    const effectiveSalary2 = Math.max(0, Number(income2 ?? 0));
+    const sgGross1 = Math.max(0, Math.round(effectiveSalary1 * effectiveSGRate1));
+    const sgGross2 = Math.max(0, Math.round(effectiveSalary2 * effectiveSGRate2));
     return [
       Math.max(0, capPerPerson - sgGross1),
       Math.max(0, capPerPerson - sgGross2)
     ];
-  }, [salary1, salary2, sgRate1, sgRate2, capPerPerson, atoRates.superGuaranteeRate]);
+  }, [income1, income2, sgRate1, sgRate2, capPerPerson, atoRates.superGuaranteeRate]);
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
@@ -205,7 +206,6 @@ export default function App() {
           onIncomeChange={setIncome1}
           onOutsideChange={setOut1}
           onSuperChange={setSup1}
-          onSalaryChange={setIncome1}
           onSGRateChange={setSgRate1}
           atoSGRate={atoRates.superGuaranteeRate}
           capPerPerson={capPerPerson}
@@ -227,7 +227,6 @@ export default function App() {
           onIncomeChange={setIncome2}
           onOutsideChange={setOut2}
           onSuperChange={setSup2}
-          onSalaryChange={setIncome2}
           onSGRateChange={setSgRate2}
           atoSGRate={atoRates.superGuaranteeRate}
           capPerPerson={capPerPerson}

@@ -8,7 +8,6 @@ interface PersonSuperSettingsProps {
   sgRate: number; // 0 means using ATO default
   atoSGRate: number; // Current ATO SG rate
   capPerPerson: number;
-  onSalaryChange: (value: number) => void; // This is now redundant but kept for compatibility
   onSGRateChange: (value: number) => void;
   // Optimizer data
   autoOptimize: boolean;
@@ -24,7 +23,6 @@ export default function PersonSuperSettings({
   sgRate,
   atoSGRate,
   capPerPerson,
-  onSalaryChange,
   onSGRateChange,
   autoOptimize,
   optimizerData,
