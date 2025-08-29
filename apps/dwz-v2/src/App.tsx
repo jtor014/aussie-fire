@@ -25,9 +25,7 @@ export default function App() {
   const [annualSavings, setAnnualSavings] = useState(50000);
   const [lifeExp, setLifeExp] = useState(90);
   
-  // Salary and SG rate for super guarantee calculations
-  const [salary1, setSalary1] = useState(0);
-  const [salary2, setSalary2] = useState(0);
+  // SG rate for super guarantee calculations (salary now derived from income)
   const [sgRate1, setSgRate1] = useState(0); // 0 means use ATO default
   const [sgRate2, setSgRate2] = useState(0); // 0 means use ATO default
   
@@ -205,7 +203,6 @@ export default function App() {
           onIncomeChange={setIncome1}
           onOutsideChange={setOut1}
           onSuperChange={setSup1}
-          onSalaryChange={setIncome1}
           onSGRateChange={setSgRate1}
           atoSGRate={atoRates.superGuaranteeRate}
           capPerPerson={capPerPerson}
@@ -227,7 +224,6 @@ export default function App() {
           onIncomeChange={setIncome2}
           onOutsideChange={setOut2}
           onSuperChange={setSup2}
-          onSalaryChange={setIncome2}
           onSGRateChange={setSgRate2}
           atoSGRate={atoRates.superGuaranteeRate}
           capPerPerson={capPerPerson}
