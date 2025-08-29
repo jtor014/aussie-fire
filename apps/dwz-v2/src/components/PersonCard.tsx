@@ -83,8 +83,21 @@ export default function PersonCard({
   };
 
 
+  const enhancedCardStyle: React.CSSProperties = {
+    ...cardStyle,
+    background: 'linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%)',
+    border: '2px solid #E2E8F0',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+  };
+
+  const sectionDividerStyle: React.CSSProperties = {
+    height: 1,
+    background: 'linear-gradient(90deg, transparent 0%, #E2E8F0 50%, transparent 100%)',
+    margin: '20px 0',
+  };
+
   return (
-    <div style={cardStyle} className="space-y-4">
+    <div style={enhancedCardStyle} className="space-y-4">
       <h3 style={titleStyle}>{title}</h3>
 
       {/* 1) General info */}
@@ -159,6 +172,9 @@ export default function PersonCard({
           </label>
         </div>
       </Panel>
+
+      {/* Visual divider */}
+      <div style={sectionDividerStyle}></div>
 
       {/* 3) Super settings (already implemented) */}
       <PersonSuperSettings
