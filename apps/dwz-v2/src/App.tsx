@@ -4,6 +4,7 @@ import { useDecision } from "./lib/useDecision";
 import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
 import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
+import { auMoney0 } from "./lib/format";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
 import PlanSpendInput from "./components/PlanSpendInput";
@@ -105,13 +106,6 @@ export default function App() {
   const optimizerData = planSpend ? planOptimizerData : genericOptimizerData;
   const optimizerLoading = planSpend ? planOptimizerLoading : genericOptimizerLoading;
   
-  const { data: planFirstData, loading: planFirstLoading } = usePlanFirstSolver(
-    baseHousehold,
-    assumptions,
-    planSpend,
-    true
-  );
-
   const household = useMemo<Household>(() => {
     // Determine effective split percentage
     const effectiveSplitPct = autoOptimize && optimizerData ? 
@@ -125,14 +119,23 @@ export default function App() {
       eligiblePeople,
       contribTaxRate: 0.15,
       outsideTaxRate: Math.max(0, Math.min(0.65, outsideTaxRate)),
-      mode: autoOptimize && optimizerData ? 'grossDeferral' as const : 'netFixed' as const
+      // Always use grossDeferral mode when autoOptimize is on, regardless of whether optimizerData exists yet
+      mode: autoOptimize ? 'grossDeferral' as const : 'netFixed' as const
     } : undefined;
     
     return {
       ...baseHousehold,
       preFireSavingsSplit
     };
-  }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings]);
+  }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings, outsideTaxRate]);
+
+  // Use the SAME household for plan-first solver to ensure consistency
+  const { data: planFirstData, loading: planFirstLoading } = usePlanFirstSolver(
+    household,  // Use same household as decision solver!
+    assumptions,
+    planSpend,
+    true
+  );
 
   // Pass the earliest age from plan-first solver to ensure consistency
   // Only call solver if we have an achievable plan (earliest age is not null)
@@ -244,7 +247,7 @@ export default function App() {
                 checked={autoOptimize} 
                 onChange={e => setAutoOptimize(e.target.checked)}
               />
-              {' '}Auto-optimize {planSpend ? `for earliest age at $${planSpend.toLocaleString()}/yr` : 'for earliest retirement'}
+              {' '}Auto-optimize {planSpend ? `for earliest age at ${auMoney0(planSpend)}/yr` : 'for earliest retirement'}
             </label>
             <div style={{ fontSize: 12, color: "#666", marginTop: 4, marginBottom: 8 }}>
               This optimizer treats your savings as <strong>pre-tax salary you can direct</strong>. Outside is taxed at your marginal rate; super is taxed at 15% (concessional).
@@ -333,7 +336,7 @@ export default function App() {
           <div style={{ marginTop: 12, padding: 8, background: "#f0f8ff", borderRadius: 4 }}>
             <strong>Optimizer Result:</strong> {Math.round(optimizerData.recommendedPct * 100)}% to super 
             → {planSpend 
-                ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for $${planSpend.toLocaleString()}/yr plan`
+                ? `earliest age ${Number.isFinite(optimizerData.earliestAge) ? optimizerData.earliestAge : '—'} for ${auMoney0(planSpend)}/yr plan`
                 : `retire at age ${optimizerData.earliestAge}`}
             {optimizerData.explanation && (
               <div style={{ fontSize: 13, color: "#555", marginTop: 6, fontStyle: "italic" }}>
@@ -386,15 +389,15 @@ export default function App() {
           <div style={{ padding: 12, borderRadius: 8, background: "#e8f8ef", marginBottom: 12 }}>
             <div>
               <strong>
-                At your plan $${planSpend.toLocaleString()}/yr, earliest viable age is {planFirstData.earliestAge}.
+                At your plan {auMoney0(planSpend)}/yr, earliest viable age is {planFirstData.earliestAge}.
               </strong>
               <div style={{ marginTop: 4 }}>
-                DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>${Math.round(planFirstData.atAgeSpend || data.sustainableAnnual).toLocaleString()}/yr</strong>
+                DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>{auMoney0(Math.round(planFirstData.atAgeSpend || data.sustainableAnnual))}/yr</strong>
               </div>
             </div>
             
             <div style={{ marginTop: 8 }}>
-              Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need ${Math.round(data.bridge.need).toLocaleString()} PV, have ${Math.round(data.bridge.have).toLocaleString()} for {data.bridge.years} years
+              Bridge: {data.bridge.status === "covered" ? "✅ Covered" : "⚠️ Short"} — need {auMoney0(Math.round(data.bridge.need))} PV, have {auMoney0(Math.round(data.bridge.have))} for {data.bridge.years} years
             </div>
             
             {household.preFireSavingsSplit && (

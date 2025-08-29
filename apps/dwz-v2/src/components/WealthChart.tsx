@@ -1,5 +1,6 @@
 import { LineChart, Line, CartesianGrid, Tooltip, XAxis, YAxis, ResponsiveContainer, ReferenceLine, ReferenceArea } from "recharts";
 import type { PathPoint } from "dwz-core";
+import { tickShortAUD, tooltipAUD } from '../lib/format';
 
 export default function WealthChart({ path, lifeExp, retireAge }: { path: PathPoint[]; lifeExp: number; retireAge?: number }) {
   if (!path?.length) return null;
@@ -27,9 +28,9 @@ export default function WealthChart({ path, lifeExp, retireAge }: { path: PathPo
         <LineChart data={data} margin={{ top: 20, right: 20, bottom: 10, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="age" />
-          <YAxis tickFormatter={(v) => `${Math.round(v/1000)}k`} />
+          <YAxis tickFormatter={tickShortAUD} />
           <Tooltip 
-            formatter={(v: number) => `$${v.toLocaleString()}`}
+            formatter={(v: any) => tooltipAUD(v)}
             labelFormatter={(age) => {
               const point = data.find(d => d.age === age);
               const phaseLabel = point?.lifecyclePhase === "accum" ? " (Accumulating)" : 

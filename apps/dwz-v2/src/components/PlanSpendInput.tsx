@@ -1,4 +1,5 @@
 import React from 'react';
+import { auMoney0 } from '../lib/format';
 
 interface PlanSpendInputProps {
   planSpend: number | null;
@@ -38,7 +39,7 @@ export default function PlanSpendInput({ planSpend, onPlanSpendChange, result, l
         </label>
         
         <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, marginBottom: 8 }}>
-          Default is pre-filled based on your household (couples: $95,000). Adjust to your lifestyle.
+          Default is pre-filled based on your household (couples: {auMoney0(95000)}). Adjust to your lifestyle.
         </div>
         
         {loading && (
@@ -51,16 +52,16 @@ export default function PlanSpendInput({ planSpend, onPlanSpendChange, result, l
           <div style={{ fontSize: 14, marginTop: 8 }}>
             {result.earliestAge !== null ? (
               <div style={{ color: '#059669' }}>
-                <strong>✅ At your plan ${planSpend.toLocaleString()}/yr, earliest viable age is {result.earliestAge}.</strong>
+                <strong>✅ At your plan {auMoney0(planSpend)}/yr, earliest viable age is {result.earliestAge}.</strong>
                 {result.atAgeSpend && (
                   <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                    DWZ sustainable spending at that age: ${Math.round(result.atAgeSpend).toLocaleString()}/yr
+                    DWZ sustainable spending at that age: {auMoney0(Math.round(result.atAgeSpend))}/yr
                   </div>
                 )}
               </div>
             ) : (
               <div style={{ color: '#dc2626' }}>
-                <strong>❌ Your plan ${planSpend.toLocaleString()}/yr is not achievable under current assumptions.</strong>
+                <strong>❌ Your plan {auMoney0(planSpend)}/yr is not achievable under current assumptions.</strong>
                 <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
                   Try reducing expenses, increasing savings, or adjusting other parameters.
                 </div>
