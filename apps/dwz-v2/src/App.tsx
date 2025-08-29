@@ -289,10 +289,22 @@ export default function App() {
             )}
           </div>
           <div>
-            <div style={{ marginBottom: 8 }}>
-              <span style={{ color: '#666', fontSize: '14px' }}>
-                Concessional cap per person (ATO FY {atoRates.financialYear}): 
-                <strong style={{ color: '#000' }}> {auMoney0(capPerPerson)}</strong>
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: 8, 
+                padding: '4px 8px', 
+                borderRadius: 16, 
+                backgroundColor: '#f3f4f6', 
+                border: '1px solid #e5e7eb',
+                fontSize: '12px',
+                color: '#6b7280'
+              }}>
+                <span>ATO</span>
+                <span>FY {atoRates.financialYear}</span>
+                <span>Cap {auMoney0(atoRates.concessionalCap)}</span>
+                <span>SG {(atoRates.superGuaranteeRate * 100).toFixed(1)}%</span>
               </span>
             </div>
             <label>Eligible people: 
