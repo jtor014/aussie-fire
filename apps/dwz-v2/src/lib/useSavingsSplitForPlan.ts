@@ -7,7 +7,7 @@ export function useSavingsSplitForPlan(
   a: Assumptions,
   policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; outsideTaxRate?: number; maxPct?: number },
   plan: number | null,
-  opts: { gridPoints?: number; refineIters?: number; window?: number; ageToleranceYears?: number; preferSuperTieBreak?: boolean } = {},
+  opts: { gridPoints?: number; refineIters?: number; window?: number } = {},
   enabled: boolean = true
 ) {
   const [data, setData] = useState<SavingsSplitForPlanResult | null>(null);

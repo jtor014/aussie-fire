@@ -67,7 +67,7 @@ export default function Panel({
   };
 
   return (
-    <section style={{ ...sectionStyle, ...className }} className={typeof className === 'string' ? className : ''}>
+    <section style={sectionStyle} className={className}>
       <header style={headerStyle}>
         <div style={titleStyle}>{title}</div>
         {subtitle && <div style={subtitleStyle}>{subtitle}</div>}

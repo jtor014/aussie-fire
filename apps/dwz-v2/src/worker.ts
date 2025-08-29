@@ -6,7 +6,7 @@ type WorkerMessage =
   | { id: number; type: 'COMPUTE_DECISION'; household: Household; assumptions: Assumptions; forceRetireAge?: number }
   | { id: number; type: 'OPTIMIZE_SAVINGS_SPLIT'; household: Household; assumptions: Assumptions; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; maxPct?: number } }
   | { id: number; type: 'EARLIEST_AGE_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number }
-  | { id: number; type: 'OPTIMIZE_SPLIT_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; outsideTaxRate?: number; maxPct?: number }; opts?: { gridPoints?: number; refineIters?: number; window?: number; ageToleranceYears?: number; preferSuperTieBreak?: boolean } };
+  | { id: number; type: 'OPTIMIZE_SPLIT_FOR_PLAN'; household: Household; assumptions: Assumptions; plan: number; policy: { capPerPerson: number; eligiblePeople: number; contribTaxRate?: number; outsideTaxRate?: number; maxPct?: number }; opts?: { gridPoints?: number; refineIters?: number; window?: number } };
 
 self.addEventListener("message", (e: MessageEvent) => {
   const msg = e.data as WorkerMessage;
