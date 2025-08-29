@@ -112,3 +112,93 @@ describe('allocateConcessionalByMTR', () => {
     expect(result.totalAllocated).toBeCloseTo(10000, 0);
   });
 });
+
+describe('allocateConcessionalByMTR - Invariant Tests', () => {
+  test('sum invariant: total allocated equals min(totalSS, sum of headroom)', () => {
+    const scenarios = [
+      // Under-allocated (total < headroom)
+      { total: 15000, people: [{ id: 0, headroom: 10000, mtr: 0.47 }, { id: 1, headroom: 20000, mtr: 0.345 }] },
+      // Over-allocated (total > headroom)
+      { total: 40000, people: [{ id: 0, headroom: 10000, mtr: 0.47 }, { id: 1, headroom: 15000, mtr: 0.345 }] },
+      // Exact fit
+      { total: 25000, people: [{ id: 0, headroom: 10000, mtr: 0.47 }, { id: 1, headroom: 15000, mtr: 0.345 }] }
+    ];
+
+    scenarios.forEach(scenario => {
+      const result = allocateConcessionalByMTR(scenario.total, scenario.people);
+      const totalHeadroom = scenario.people.reduce((sum, p) => sum + Math.max(0, p.headroom), 0);
+      const expectedAllocation = Math.min(scenario.total, totalHeadroom);
+      
+      expect(result.totalAllocated).toBeCloseTo(expectedAllocation, 1); // Within $1
+      
+      // Sum of per-person allocations should equal totalAllocated
+      const sumPerPerson = result.perPerson.reduce((sum, p) => sum + p.ssGross, 0);
+      expect(sumPerPerson).toBeCloseTo(result.totalAllocated, 1);
+    });
+  });
+
+  test('MTR preference invariant: higher MTR person should not get less when MTR increases', () => {
+    const basePeople = [
+      { id: 0, headroom: 20000, mtr: 0.37 },
+      { id: 1, headroom: 20000, mtr: 0.345 }
+    ];
+
+    const result1 = allocateConcessionalByMTR(25000, basePeople);
+    const person0Base = result1.perPerson.find(p => p.id === 0)!.ssGross;
+
+    // Increase person 0's MTR
+    const higherMTRPeople = [
+      { id: 0, headroom: 20000, mtr: 0.47 }, // Higher MTR
+      { id: 1, headroom: 20000, mtr: 0.345 }
+    ];
+
+    const result2 = allocateConcessionalByMTR(25000, higherMTRPeople);
+    const person0Higher = result2.perPerson.find(p => p.id === 0)!.ssGross;
+
+    // Higher MTR should get same or more allocation (unless hitting cap)
+    expect(person0Higher).toBeGreaterThanOrEqual(person0Base);
+  });
+
+  test('cap constraint invariant: no person exceeds their headroom', () => {
+    const testCases = [
+      { total: 50000, people: [{ id: 0, headroom: 5000, mtr: 0.47 }, { id: 1, headroom: 8000, mtr: 0.345 }] },
+      { total: 100000, people: [{ id: 0, headroom: 15000, mtr: 0.47 }, { id: 1, headroom: 0, mtr: 0.37 }] }
+    ];
+
+    testCases.forEach(testCase => {
+      const result = allocateConcessionalByMTR(testCase.total, testCase.people);
+      
+      result.perPerson.forEach((allocation, index) => {
+        const person = testCase.people.find(p => p.id === allocation.id)!;
+        expect(allocation.ssGross).toBeLessThanOrEqual(Math.max(0, person.headroom) + 0.01); // Within penny
+      });
+    });
+  });
+
+  test('MTR grouping invariant: equal MTRs split pro-rata by headroom', () => {
+    const result = allocateConcessionalByMTR(30000, [
+      { id: 0, headroom: 10000, mtr: 0.37 },
+      { id: 1, headroom: 5000, mtr: 0.37 },   // Same MTR
+      { id: 2, headroom: 15000, mtr: 0.37 },  // Same MTR
+    ]);
+
+    const person0 = result.perPerson.find(p => p.id === 0)!.ssGross;
+    const person1 = result.perPerson.find(p => p.id === 1)!.ssGross;
+    const person2 = result.perPerson.find(p => p.id === 2)!.ssGross;
+
+    // Total headroom: 30k, perfect fit
+    // Should split pro-rata: 10k/30k = 1/3, 5k/30k = 1/6, 15k/30k = 1/2
+    expect(person0).toBeCloseTo(10000, 0);
+    expect(person1).toBeCloseTo(5000, 0);
+    expect(person2).toBeCloseTo(15000, 0);
+  });
+
+  test('precision invariant: allocation precision to nearest dollar', () => {
+    const result = allocateConcessionalByMTR(10000.67, [
+      { id: 0, headroom: 15000.33, mtr: 0.37 }
+    ]);
+
+    const allocation = result.perPerson.find(p => p.id === 0)!.ssGross;
+    expect(allocation % 1).toBeCloseTo(0, 2); // Should be whole dollars
+  });
+});

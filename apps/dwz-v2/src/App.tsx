@@ -6,6 +6,7 @@ import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
 import { useConcessionalCap, useATORates, useAutoMarginalTaxRate } from "./lib/useATORates";
 import { calculateMarginalTaxRate } from "./lib/auRates";
+import { splitSalarySacrifice } from "./lib/suggestSalarySacrifice";
 import { auMoney0 } from "./lib/format";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
@@ -441,6 +442,24 @@ export default function App() {
               Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
               Evaluations: {optimizerData.evals}
             </div>
+            
+            {(() => {
+              // Calculate per-person salary sacrifice split
+              const householdRecommendedGross = Math.max(0, Math.round(annualSavings * optimizerData.recommendedPct));
+              const splitAmounts = splitSalarySacrifice(householdRecommendedGross, remainingCaps, personalMTRs);
+              const totalSplit = splitAmounts.reduce((sum, amt) => sum + amt, 0);
+              
+              if (totalSplit > 0) {
+                return (
+                  <div style={{ fontSize: 12, color: "#333", marginTop: 6, padding: 4, background: "#fff3cd", borderRadius: 3, border: "1px solid #ffeaa7" }}>
+                    <strong>Salary-sacrifice this year: {auMoney0(totalSplit)} total</strong>
+                    {' — '}You {auMoney0(splitAmounts[0] || 0)} • Partner {auMoney0(splitAmounts[1] || 0)}
+                    <span style={{ color: "#856404", fontSize: 11 }}> (by MTR & cap)</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             
             {data && (
               <div style={{ marginTop: 6, fontSize: 12, color: "#555", padding: 6, background: "#f8f9fa", borderRadius: 3 }}>
