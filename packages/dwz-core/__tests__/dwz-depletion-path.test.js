@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { optimizeSavingsSplitForPlan } from '../src/optimizer/savingsSplit.ts';
 
 describe('dwz depletion path via solver+optimizer', () => {
-  test('tie-breaker for consistent plan uses tax-aware boundary wealth', () => {
+  test('tie-breaker for consistent plan maximizes super percentage', () => {
     const baseInput = {
       currentAge: 45,
       preserveAge: 60,
@@ -29,15 +29,13 @@ describe('dwz depletion path via solver+optimizer', () => {
     const opts = {
       gridPoints: 11,
       refineIters: 1,
-      window: 0.10,
-      ageToleranceYears: 0.5,
-      preferSuperTieBreak: true
+      window: 0.10
     };
 
     const result = optimizeSavingsSplitForPlan(baseInput, 75000, policy, opts);
     
-    // With salary sacrifice advantage (32% MTR vs 15% super tax) and tie-breaker,
-    // we should prefer some super allocation over 0% when ages are close
+    // With new tie-breaker that maximizes super percentage,
+    // we should prefer maximum super allocation when ages are tied
     expect(result.recommendedPct).toBeGreaterThan(0.3);
     expect(result.earliestAge).toBeGreaterThanOrEqual(45);  // Verify feasible result
   });
