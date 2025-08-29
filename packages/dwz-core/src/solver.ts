@@ -29,6 +29,9 @@ export type Inputs = {
 
   // Optional pre-FIRE savings split policy
   preFireSavingsSplit?: import('./types.js').PreFireSavingsSplit;
+  
+  // Optional employer SG gross (combined across all people)
+  employerSGGross?: number;
 };
 
 export type SolverPathPoint = {
@@ -84,6 +87,13 @@ export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverP
   let sup = inp.super0;
 
   while (age < retireAge) {
+    // Add employer SG net (after 15% contrib tax) to super during accumulation
+    const employerSGGross = inp.employerSGGross ?? 0;
+    if (employerSGGross > 0) {
+      const sgNet = Math.round(employerSGGross * (1 - 0.15) * 100) / 100;
+      sup += sgNet;
+    }
+
     // Pre-FIRE accumulation (before fees/returns): split annualSavings into outside vs super if configured
     const totalSavings = inp.annualSavings;
     if (totalSavings > 0) {
@@ -93,7 +103,8 @@ export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverP
         const desiredSuperGross = totalSavings * pct;
         // Clamp eligiblePeople to reasonable household size (0-2)
         const eligible = Math.min(2, Math.max(0, split.eligiblePeople || 0));
-        const capTotal = Math.max(0, (split.capPerPerson || 0) * eligible);
+        // Effective concessional headroom = cap - employer SG gross, clamped >= 0
+        const capTotal = Math.max(0, (split.capPerPerson || 0) * eligible - employerSGGross);
         const superGross = Math.min(desiredSuperGross, capTotal);
         
         // Apply tax-aware mode

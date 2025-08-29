@@ -45,6 +45,9 @@
       "Bash(npm run:*)",
       "Bash(pnpm --filter packages/dwz-core test)",
 <<<<<<< HEAD
+      "Bash(pnpm --filter packages/dwz-core test plan.decision.consistency)"
+=======
+<<<<<<< HEAD
       "Bash(pnpm --filter packages/dwz-core test plan.decision.consistency)",
       "Bash(pkill:*)",
       "Bash(git rev-parse:*)",
@@ -54,6 +57,7 @@
 =======
       "Bash(keeping 0% within tolerance.\"\n- \"Optimal split 45%→super achieves earliest age 52.\"\n\n## Test Results\n- All existing tests pass ✅\n- Build successful ✅\n- No math changes to optimizer logic ✅\n\n🤖 Generated with [Claude Code](https://claude.ai/code)\nEOF\n)\")"
 >>>>>>> origin/main
+>>>>>>> 686518037721806587100505e58b83b5809cf5ff
     ],
     "deny": [],
     "ask": []

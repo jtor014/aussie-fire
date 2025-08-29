@@ -45,7 +45,7 @@ export function optimizeSavingsSplit(
     const constraints: SavingsSplitConstraints = {
       capPerPerson: policy.capPerPerson,
       eligiblePeople: policy.eligiblePeople,
-      capTotal: policy.capPerPerson * policy.eligiblePeople,
+      capTotal: Math.max(0, policy.capPerPerson * policy.eligiblePeople - (baseInput.employerSGGross ?? 0)),
       contribTaxRate
     };
     
@@ -102,8 +102,10 @@ export function optimizeSavingsSplit(
   ])).sort((a,b) => a-b);
   const sensitivity = sensPcts.map(p => ({ pct: p, earliestAge: evalAt(p).earliestAge }));
 
-  // cap binding at optimum?
-  const capBindingAtOpt = ((baseInput.annualSavings || 0) * bestPct) > (policy.capPerPerson * policy.eligiblePeople + 1e-9);
+  // cap binding at optimum? Consider effective headroom after employer SG
+  const employerSG = baseInput.employerSGGross ?? 0;
+  const effectiveCapTotal = Math.max(0, policy.capPerPerson * policy.eligiblePeople - employerSG);
+  const capBindingAtOpt = ((baseInput.annualSavings || 0) * bestPct) > (effectiveCapTotal + 1e-9);
 
   return {
     recommendedPct: bestPct,
@@ -179,7 +181,7 @@ export function optimizeSavingsSplitForPlan(
     const constraints: SavingsSplitConstraints = {
       capPerPerson: policy.capPerPerson,
       eligiblePeople: policy.eligiblePeople,
-      capTotal: policy.capPerPerson * policy.eligiblePeople,
+      capTotal: Math.max(0, policy.capPerPerson * policy.eligiblePeople - (baseInput.employerSGGross ?? 0)),
       contribTaxRate
     };
     
@@ -206,7 +208,7 @@ export function optimizeSavingsSplitForPlan(
       constraints: {
         capPerPerson: policy.capPerPerson,
         eligiblePeople: policy.eligiblePeople,
-        capTotal: policy.capPerPerson * policy.eligiblePeople,
+        capTotal: Math.max(0, policy.capPerPerson * policy.eligiblePeople - (baseInput.employerSGGross ?? 0)),
         contribTaxRate,
         capBindingAtOpt: false
       },
@@ -240,7 +242,7 @@ export function optimizeSavingsSplitForPlan(
       constraints: {
         capPerPerson: policy.capPerPerson,
         eligiblePeople: policy.eligiblePeople,
-        capTotal: policy.capPerPerson * policy.eligiblePeople,
+        capTotal: Math.max(0, policy.capPerPerson * policy.eligiblePeople - (baseInput.employerSGGross ?? 0)),
         contribTaxRate,
         capBindingAtOpt: false
       },
@@ -347,7 +349,7 @@ export function optimizeSavingsSplitForPlan(
     earliestAge: evalAt(p).earliestAge ?? Infinity
   }));
 
-  const capBindingAtOpt = (baseInput.annualSavings * chosenPct) > (policy.capPerPerson * policy.eligiblePeople + 1e-9);
+  const capBindingAtOpt = (baseInput.annualSavings * chosenPct) > (Math.max(0, policy.capPerPerson * policy.eligiblePeople - (baseInput.employerSGGross ?? 0)) + 1e-9);
 
   // Build a concise explanation string for the UI
   let explanation = '';

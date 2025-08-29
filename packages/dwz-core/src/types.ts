@@ -10,6 +10,10 @@ export type Person = {
   hecs?: number;
   superPrem?: number;
   preserveAge?: number; // default 60
+  /** Gross annual salary used to derive employer super guarantee (SG). Optional; defaults to 0. */
+  salary?: number;
+  /** Employer SG rate (e.g. 0.12 for 12%). Optional; defaults to 0. */
+  sgRate?: number;
 };
 
 export type Household = {
