@@ -25,6 +25,12 @@ export default function App() {
   const [annualSavings, setAnnualSavings] = useState(50000);
   const [lifeExp, setLifeExp] = useState(90);
   
+  // Salary and SG rate for super guarantee calculations
+  const [salary1, setSalary1] = useState(0);
+  const [salary2, setSalary2] = useState(0);
+  const [sgRate1, setSgRate1] = useState(0); // 0 means use ATO default
+  const [sgRate2, setSgRate2] = useState(0); // 0 means use ATO default
+  
   // Savings split optimization
   const [autoOptimize, setAutoOptimize] = useState(true);
   const [manualSplitPct, setManualSplitPct] = useState(0.5);
@@ -80,12 +86,30 @@ export default function App() {
 
   // Create a basic household for the optimizer (without savings split)
   const baseHousehold = useMemo<Household>(() => ({
-    p1: { age: p1Age, income: income1, outside: out1, superBal: sup1, preserveAge: 60, superPrem: 0 },
-    p2: { age: p2Age, income: income2, outside: out2, superBal: sup2, preserveAge: 60, superPrem: 0 },
+    p1: { 
+      age: p1Age, 
+      income: income1, 
+      outside: out1, 
+      superBal: sup1, 
+      preserveAge: 60, 
+      superPrem: 0,
+      salary: salary1,
+      sgRate: sgRate1 || atoRates.superGuaranteeRate
+    },
+    p2: { 
+      age: p2Age, 
+      income: income2, 
+      outside: out2, 
+      superBal: sup2, 
+      preserveAge: 60, 
+      superPrem: 0,
+      salary: salary2,
+      sgRate: sgRate2 || atoRates.superGuaranteeRate
+    },
     targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
     annualSavings,
     lifeExp
-  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, annualSavings, lifeExp]);
+  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, salary1, salary2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate]);
   
   // Use plan-first optimizer when plan is set, otherwise fall back to generic optimizer
   const { data: genericOptimizerData, loading: genericOptimizerLoading } = useSavingsSplitOptimizer(
@@ -149,6 +173,18 @@ export default function App() {
     shouldSolve  // Pass enabled flag to prevent solver call when not achievable
   );
 
+  // Calculate remaining caps for both people (for optimizer suggestion splitting)
+  const remainingCaps = useMemo(() => {
+    const effectiveSGRate1 = sgRate1 || atoRates.superGuaranteeRate;
+    const effectiveSGRate2 = sgRate2 || atoRates.superGuaranteeRate;
+    const sgGross1 = Math.max(0, Math.round(salary1 * effectiveSGRate1));
+    const sgGross2 = Math.max(0, Math.round(salary2 * effectiveSGRate2));
+    return [
+      Math.max(0, capPerPerson - sgGross1),
+      Math.max(0, capPerPerson - sgGross2)
+    ];
+  }, [salary1, salary2, sgRate1, sgRate2, capPerPerson, atoRates.superGuaranteeRate]);
+
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <h1>Australian FIRE Calculator — DWZ v2 (Couples-first)</h1>
@@ -156,25 +192,47 @@ export default function App() {
       <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 24 }}>
         <PersonCard
           title="You"
+          index={0}
           age={p1Age}
           income={income1}
           outside={out1}
           super={sup1}
+          salary={salary1}
+          sgRate={sgRate1}
           onAgeChange={setP1Age}
           onIncomeChange={setIncome1}
           onOutsideChange={setOut1}
           onSuperChange={setSup1}
+          onSalaryChange={setSalary1}
+          onSGRateChange={setSgRate1}
+          atoSGRate={atoRates.superGuaranteeRate}
+          capPerPerson={capPerPerson}
+          autoOptimize={autoOptimize}
+          optimizerData={optimizerData}
+          annualSavings={annualSavings}
+          allRemainingCaps={remainingCaps}
         />
         <PersonCard
           title="Partner"
+          index={1}
           age={p2Age}
           income={income2}
           outside={out2}
           super={sup2}
+          salary={salary2}
+          sgRate={sgRate2}
           onAgeChange={setP2Age}
           onIncomeChange={setIncome2}
           onOutsideChange={setOut2}
           onSuperChange={setSup2}
+          onSalaryChange={setSalary2}
+          onSGRateChange={setSgRate2}
+          atoSGRate={atoRates.superGuaranteeRate}
+          capPerPerson={capPerPerson}
+          autoOptimize={autoOptimize}
+          optimizerData={optimizerData}
+          annualSavings={annualSavings}
+          allRemainingCaps={remainingCaps}
         />
       </section>
 

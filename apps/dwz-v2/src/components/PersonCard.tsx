@@ -1,27 +1,51 @@
 import React from 'react';
+import PersonSuperSettings from './PersonSuperSettings';
 
 interface PersonCardProps {
   title: string;
+  index: number;
   age: number;
   income: number;
   outside: number;
   super: number;
+  salary: number;
+  sgRate: number;
   onAgeChange: (value: number) => void;
   onIncomeChange: (value: number) => void;
   onOutsideChange: (value: number) => void;
   onSuperChange: (value: number) => void;
+  onSalaryChange: (value: number) => void;
+  onSGRateChange: (value: number) => void;
+  // Super Settings data
+  atoSGRate: number;
+  capPerPerson: number;
+  autoOptimize: boolean;
+  optimizerData?: { recommendedPct: number } | null;
+  annualSavings: number;
+  allRemainingCaps: number[];
 }
 
 export default function PersonCard({
   title,
+  index,
   age,
   income,
   outside,
   super: superBalance,
+  salary,
+  sgRate,
   onAgeChange,
   onIncomeChange,
   onOutsideChange,
-  onSuperChange
+  onSuperChange,
+  onSalaryChange,
+  onSGRateChange,
+  atoSGRate,
+  capPerPerson,
+  autoOptimize,
+  optimizerData,
+  annualSavings,
+  allRemainingCaps
 }: PersonCardProps) {
   const cardStyle: React.CSSProperties = {
     border: '1px solid #e5e7eb',
@@ -126,6 +150,20 @@ export default function PersonCard({
           style={inputStyle}
         />
       </label>
+
+      <PersonSuperSettings
+        index={index}
+        salary={salary}
+        sgRate={sgRate}
+        atoSGRate={atoSGRate}
+        capPerPerson={capPerPerson}
+        onSalaryChange={onSalaryChange}
+        onSGRateChange={onSGRateChange}
+        autoOptimize={autoOptimize}
+        optimizerData={optimizerData}
+        annualSavings={annualSavings}
+        allRemainingCaps={allRemainingCaps}
+      />
 
       <div style={comingSoonStyle}>
         <details style={detailsStyle}>
