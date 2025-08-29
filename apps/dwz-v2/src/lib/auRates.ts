@@ -59,3 +59,23 @@ export function defaultsForYearMonth(year: number, month1to12: number) {
   const r = AU_RATES[fy];
   return { fy, cap: r.concessionalCap, sg: r.sgRate, brackets: r.taxBrackets };
 }
+
+/** Calculate marginal tax rate including Medicare levy from ATO brackets. */
+export function calculateMarginalTaxRate(income: number, brackets: Bracket[]): number {
+  if (income <= 0) return 0;
+  
+  // Find the marginal bracket
+  let marginalRate = 0;
+  for (const bracket of brackets) {
+    if (bracket.upTo === null || income <= bracket.upTo) {
+      marginalRate = bracket.rate;
+      break;
+    }
+  }
+  
+  // Add Medicare levy (2%) for income above threshold
+  // Medicare levy applies from $25,000 (2024-25) with phase-in from $21,336
+  const medicareLevy = income >= 25000 ? 0.02 : 0;
+  
+  return Math.min(0.65, marginalRate + medicareLevy); // Cap at 65%
+}

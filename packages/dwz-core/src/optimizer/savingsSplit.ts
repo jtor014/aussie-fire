@@ -134,8 +134,6 @@ export interface SavingsSplitForPlanResult extends SavingsSplitResult {
   meta?: {
     targetAge: number;
     baselinePct: number;
-    boundaryWealthChosen?: number;
-    boundaryWealthBaseline?: number;
     usedTieBreak?: boolean;
   };
 }
@@ -151,8 +149,9 @@ export function optimizeSavingsSplitForPlan(
   const window = Math.max(0.02, opts.window ?? 0.15);
   const maxPct = Math.min(1, Math.max(0, policy.maxPct ?? 1));
   const contribTaxRate = policy.contribTaxRate ?? 0.15;
-  const tol = Math.max(0, opts.ageToleranceYears ?? 0);      // years we allow as same age
-  const tieBreak = !!opts.preferSuperTieBreak;               // enable secondary objective
+  // Legacy options kept for backward compatibility but ignored
+  // const tol = Math.max(0, opts.ageToleranceYears ?? 0);
+  // const tieBreak = !!opts.preferSuperTieBreak;
 
   type PlanEval = { earliestAge: number | null; atAgeSpend?: number; constraints: SavingsSplitConstraints };
   const memo = new Map<number, PlanEval>();
@@ -275,42 +274,27 @@ export function optimizeSavingsSplitForPlan(
     }
   }
 
-  // --- Tie-break among solutions within tolerance of best earliestAge ---
+  // --- NEW TIE-BREAKER: maximize super among solutions with same earliest age ---
   let chosenPct = bestPct;
-  let boundaryWealthChosen: number | undefined;
-  let boundaryWealthBaseline: number | undefined;
   
-  // Helper function to calculate boundary wealth at a given split and age
-  const boundaryWealthAt = (pct: number, age: number) => {
-    const at = accumulateUntil({
-      ...baseInput,
-      preFireSavingsSplit: {
-        toSuperPct: pct,
-        capPerPerson: policy.capPerPerson,
-        eligiblePeople: policy.eligiblePeople,
-        contribTaxRate,
-        outsideTaxRate: policy.outsideTaxRate,
-        mode: 'grossDeferral'
-      }
-    }, age - 1);  // Use retirement boundary (last accumulation point)
-    return at.outside + at.super;
-  };
-  
-  if (tieBreak && Number.isFinite(bestEval.earliestAge!)) {
+  if (Number.isFinite(bestEval.earliestAge!)) {
     const targetAge = bestEval.earliestAge as number;
-    // Collect candidate pcts already evaluated within tolerance
+    // Collect candidate pcts already evaluated with same earliest age (strict equality)
     const cands: number[] = [];
     memo.forEach((v, k) => {
-      if (v.earliestAge != null && (v.earliestAge as number) <= targetAge + tol + 1e-9) cands.push(k);
+      if (v.earliestAge != null && Math.abs((v.earliestAge as number) - targetAge) <= 1e-9) {
+        cands.push(k);
+      }
     });
-    // For each candidate, evaluate total wealth at the retirement boundary
-    let bestWealth = -Infinity;
+    
+    // Among candidates with same earliest age, choose the HIGHEST super percentage
+    let bestSuperPct = -1;
     for (const p of cands) {
-      const w = boundaryWealthAt(p, targetAge);
-      if (w > bestWealth) { bestWealth = w; chosenPct = p; }
+      if (p > bestSuperPct) {
+        bestSuperPct = p;
+        chosenPct = p;
+      }
     }
-    boundaryWealthChosen = bestWealth;
-    boundaryWealthBaseline = boundaryWealthAt(bestPct, targetAge);
   }
 
   // Sensitivity analysis - ensure we get 5 distinct points
@@ -355,11 +339,12 @@ export function optimizeSavingsSplitForPlan(
   let explanation = '';
   const ageTxt = (bestEval.earliestAge ?? NaN).toString();
   if (Number.isFinite(bestEval.earliestAge ?? NaN)) {
-    if (chosenPct !== bestPct && boundaryWealthChosen != null && boundaryWealthBaseline != null) {
-      const delta = Math.round(boundaryWealthChosen - boundaryWealthBaseline);
-      explanation = `Age unchanged at ${ageTxt}. Preferring ${(chosenPct*100).toFixed(0)}%→super for ${delta >= 0 ? '+' : ''}$${Math.abs(delta).toLocaleString()} boundary wealth.`;
+    if (capBindingAtOpt) {
+      explanation = `Maxed salary-sacrifice to cap without delaying retirement (age ${ageTxt}).`;
     } else if (chosenPct === 0) {
-      explanation = `Any super delays earliest age beyond ${ageTxt}; keeping ${(chosenPct*100).toFixed(0)}% within tolerance.`;
+      explanation = `Bridge binding: allocated savings outside; no super without delaying retirement.`;
+    } else if (chosenPct !== bestPct) {
+      explanation = `Maxed salary-sacrifice to ${(chosenPct*100).toFixed(0)}% without delaying retirement (age ${ageTxt}).`;
     } else {
       explanation = `Optimal split ${(chosenPct*100).toFixed(0)}%→super achieves earliest age ${ageTxt}.`;
     }
@@ -378,8 +363,6 @@ export function optimizeSavingsSplitForPlan(
     meta: {
       targetAge: bestEval.earliestAge ?? NaN,
       baselinePct: bestPct,
-      boundaryWealthChosen,
-      boundaryWealthBaseline,
       usedTieBreak: chosenPct !== bestPct
     }
   };

@@ -127,6 +127,47 @@ export default function PersonSuperSettings({
               Cap fully used by employer SG
             </div>
           )}
+          
+          {/* Visual cap usage bar */}
+          <div style={{ marginTop: 6, fontSize: 10, color: '#9ca3af' }}>
+            <div style={{ marginBottom: 2 }}>Cap usage:</div>
+            <div style={{ 
+              width: '100%', 
+              height: 8, 
+              background: '#f1f5f9', 
+              borderRadius: 4, 
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              {/* SG portion */}
+              <div style={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                height: '100%',
+                width: `${Math.min(100, (employerSGGross / capPerPerson) * 100)}%`,
+                background: '#3b82f6',
+                borderRadius: '4px 0 0 4px'
+              }} />
+              {/* Suggested SS portion */}
+              {recommendedForThisPerson > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  left: `${Math.min(100, (employerSGGross / capPerPerson) * 100)}%`,
+                  top: 0,
+                  height: '100%',
+                  width: `${Math.min(100 - (employerSGGross / capPerPerson) * 100, (recommendedForThisPerson / capPerPerson) * 100)}%`,
+                  background: '#10b981',
+                  borderRadius: employerSGGross === 0 ? '4px 0 0 4px' : '0'
+                }} />
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, fontSize: 9 }}>
+              <span>SG: {auMoney0(employerSGGross)}</span>
+              <span>SS: {recommendedForThisPerson > 0 ? auMoney0(recommendedForThisPerson) : '—'}</span>
+              <span>Cap: {auMoney0(capPerPerson)}</span>
+            </div>
+          </div>
         </div>
         
         <div style={{ gridColumn: 'span 2' }}>

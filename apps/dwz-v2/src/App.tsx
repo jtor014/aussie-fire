@@ -4,7 +4,7 @@ import { useDecision } from "./lib/useDecision";
 import { useSavingsSplitOptimizer } from "./lib/useSavingsSplitOptimizer";
 import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
-import { useConcessionalCap, useATORates } from "./lib/useATORates";
+import { useConcessionalCap, useATORates, useAutoMarginalTaxRate } from "./lib/useATORates";
 import { auMoney0 } from "./lib/format";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
@@ -34,8 +34,26 @@ export default function App() {
   const [manualSplitPct, setManualSplitPct] = useState(0.5);
   const capPerPerson = useConcessionalCap(); // ATO-derived, no user override
   const atoRates = useATORates(); // For displaying current FY info
-  const [eligiblePeople, setEligiblePeople] = useState(2);
-  const [outsideTaxRate, setOutsideTaxRate] = useState(0.32); // default 32% including Medicare
+  
+  // Auto-MTR with advanced override
+  const [useAdvancedTaxRate, setUseAdvancedTaxRate] = useState(false);
+  const [manualTaxRate, setManualTaxRate] = useState(0.32);
+  const autoTaxRate = useAutoMarginalTaxRate(income1, income2);
+  const outsideTaxRate = useAdvancedTaxRate ? manualTaxRate : autoTaxRate;
+  
+  // Auto-derive eligible people from cap headroom
+  const calculateEligiblePeople = () => {
+    const effectiveSGRate1 = sgRate1 || atoRates.superGuaranteeRate;
+    const effectiveSGRate2 = sgRate2 || atoRates.superGuaranteeRate;
+    const p1RemainingCap = Math.max(0, capPerPerson - Math.round(income1 * effectiveSGRate1));
+    const p2RemainingCap = Math.max(0, capPerPerson - Math.round(income2 * effectiveSGRate2));
+    
+    let eligible = 0;
+    if (p1RemainingCap > 0) eligible++;
+    if (income2 > 0 && p2RemainingCap > 0) eligible++;
+    return Math.max(1, eligible); // At least 1 for single person households
+  };
+  const eligiblePeople = calculateEligiblePeople();
   
   // Plan-first solver with default
   const [planSpend, setPlanSpend] = useState<number | null>(null);
@@ -309,25 +327,40 @@ export default function App() {
             <div style={{ fontSize: 12, color: "#666", marginTop: 4, marginBottom: 8 }}>
               This optimizer treats your savings as <strong>pre-tax salary you can direct</strong>. Outside is taxed at your marginal rate; super is taxed at 15% (concessional).
             </div>
-            <label style={{ display: 'block', marginTop: 8 }}>
-              Marginal tax rate on outside savings (% incl. Medicare):
-              <input 
-                type="number" 
-                min="0" 
-                max="65" 
-                step="0.5"
-                value={(outsideTaxRate * 100).toFixed(1)} 
-                onChange={e => setOutsideTaxRate(Math.max(0, Math.min(0.65, (+e.target.value || 0) / 100)))}
-                style={{
-                  width: '80px',
-                  padding: '4px 6px',
-                  border: '1px solid #d1d5db',
-                  borderRadius: 4,
-                  fontSize: 14,
-                  marginLeft: 8
-                }}
-              />%
-            </label>
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
+                Using ATO marginal rate: <strong>{(outsideTaxRate * 100).toFixed(1)}%</strong>
+                {' '}(based on ${Math.max(income1, income2 || 0).toLocaleString()} income + Medicare levy)
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', fontSize: 12, color: "#666" }}>
+                <input 
+                  type="checkbox" 
+                  checked={useAdvancedTaxRate}
+                  onChange={e => setUseAdvancedTaxRate(e.target.checked)}
+                  style={{ marginRight: 6 }}
+                />
+                Advanced → Override:
+                {useAdvancedTaxRate && (
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="65" 
+                    step="0.5"
+                    value={(manualTaxRate * 100).toFixed(1)} 
+                    onChange={e => setManualTaxRate(Math.max(0, Math.min(0.65, (+e.target.value || 0) / 100)))}
+                    style={{
+                      width: '70px',
+                      padding: '2px 4px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: 3,
+                      fontSize: 12,
+                      marginLeft: 6
+                    }}
+                  />
+                )}
+                {useAdvancedTaxRate && '%'}
+              </label>
+            </div>
             {!autoOptimize && (
               <div style={{ marginTop: 8 }}>
                 <label>Manual split to super: 
@@ -362,12 +395,10 @@ export default function App() {
                 <span>SG {(atoRates.superGuaranteeRate * 100).toFixed(1)}%</span>
               </span>
             </div>
-            <label>Eligible people: 
-              <select value={eligiblePeople} onChange={e => setEligiblePeople(+e.target.value)}>
-                <option value={1}>1 (single)</option>
-                <option value={2}>2 (couple)</option>
-              </select>
-            </label>
+            <div style={{ fontSize: 12, color: "#666", marginTop: 8 }}>
+              Eligible people: <strong>{eligiblePeople}</strong>
+              {' '}(auto-derived from cap headroom)
+            </div>
             <div style={{ marginTop: 12, padding: 8, background: '#f8f9fa', border: '1px solid #e9ecef', borderRadius: 6 }}>
               <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4, color: '#495057' }}>
                 Optimizer Policy:
@@ -396,6 +427,24 @@ export default function App() {
               Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
               Evaluations: {optimizerData.evals}
             </div>
+            
+            {data && (
+              <div style={{ marginTop: 6, fontSize: 12, color: "#555", padding: 6, background: "#f8f9fa", borderRadius: 3 }}>
+                <div><strong>Bridge Analysis:</strong></div>
+                <div>Bridge PV needed: <strong>${Math.round(data.bridge.need).toLocaleString()}</strong></div>
+                <div>Outside PV provided: <strong>${Math.round(data.bridge.have).toLocaleString()}</strong></div>
+                {data.bridge.status === "short" && (
+                  <div style={{ color: "#e67e22" }}>
+                    Bridge binding: allocated ${Math.round(data.bridge.need - data.bridge.have).toLocaleString()}/yr outside; remainder to super.
+                  </div>
+                )}
+                {data.bridge.status === "covered" && (
+                  <div style={{ color: "#27ae60" }}>
+                    Bridge covered: {data.bridge.have >= data.bridge.need ? "sufficient outside funds" : "super accessible"}
+                  </div>
+                )}
+              </div>
+            )}
             
             <details style={{ marginTop: 8 }}>
               <summary style={{ cursor: 'pointer', fontSize: 14 }}>Sensitivity Analysis</summary>
