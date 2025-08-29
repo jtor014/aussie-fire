@@ -44,7 +44,12 @@
       "Bash(npm -w packages/dwz-core run build)",
       "Bash(npm run:*)",
       "Bash(pnpm --filter packages/dwz-core test)",
-      "Bash(pnpm --filter packages/dwz-core test plan.decision.consistency)"
+      "Bash(pnpm --filter packages/dwz-core test plan.decision.consistency)",
+      "Bash(pkill:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(pnpm:*)",
+      "Bash(npm i)",
+      "Bash(npx vite:*)"
     ],
     "deny": [],
     "ask": []
