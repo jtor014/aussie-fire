@@ -1,9 +1,13 @@
 import React from 'react';
+import InfoChips from './InfoChips';
+import InfoTip from './InfoTip';
 
 export default function Panel({
   title,
   subtitle,
   definition,
+  chips,
+  help,
   children,
   className = '',
 }: {
@@ -11,6 +15,10 @@ export default function Panel({
   subtitle?: React.ReactNode;
   /** Optional muted definition/help block shown below subtitle */
   definition?: React.ReactNode;
+  /** Compact badges shown under the header */
+  chips?: string[];
+  /** Extra help content rendered in a tiny disclosure ("Learn more") */
+  help?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -24,6 +32,8 @@ export default function Panel({
             {definition}
           </div>
         )}
+        {chips && chips.length > 0 && <InfoChips items={chips} />}
+        {help && <InfoTip>{help}</InfoTip>}
       </header>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {children}

@@ -91,10 +91,11 @@ export default function PersonCard({
       <Panel
         title="General info"
         subtitle="Your age and income."
-        definition={
+        chips={['today\'s dollars', 'end-of-year ages', 'Tax & Benefits soon']}
+        help={
           <span>
-            All figures are in <strong>today's dollars</strong>. Ages update at end of year (spend → grow → advance age).
-            A dedicated <em>Tax &amp; Benefits</em> panel (HECS/HELP, rebates, MLS) will sit here soon.
+            Figures are net real (inflation-adjusted). We advance age at end of year after spend → returns/fees. 
+            A Tax &amp; Benefits panel (e.g., HECS/HELP, rebates, MLS) will live here.
           </span>
         }
       >
@@ -126,10 +127,12 @@ export default function PersonCard({
       <Panel
         title="Assets"
         subtitle="Starting balances"
-        definition={
+        chips={['outside vs super', 'no contributions after FIRE', 'more assets soon']}
+        help={
           <span>
-            Balances are tracked as <strong>outside</strong> vs <strong>super</strong>. No contributions occur after FIRE
-            (DWZ invariant). We'll add other asset types &amp; lump sums here in a future update.
+            We track two buckets for withdrawals and tax: outside and super. 
+            After retirement (FIRE), contributions stop by design (DWZ). 
+            We'll add other assets and one-off lump sums here later.
           </span>
         }
       >
