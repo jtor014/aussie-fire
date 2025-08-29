@@ -30,6 +30,13 @@ export const AU_RATES: Record<FinancialYear, {
   },
 };
 
+/** Pure FY calculator from local year/month. Month is 1..12. */
+export function fyFromYearMonth(year: number, month1to12: number): FinancialYear {
+  const yStart = month1to12 >= 7 ? year : year - 1;
+  const label = `${yStart}-${(yStart + 1).toString().slice(-2)}` as FinancialYear;
+  return (label in AU_RATES ? label : '2024-25');
+}
+
 /** Determine AU financial year in Australia/Melbourne time. */
 export function currentFYNowMelbourne(d = new Date()): FinancialYear {
   // FY rolls on 1 July; ensure we compute in Melbourne time.
@@ -37,13 +44,18 @@ export function currentFYNowMelbourne(d = new Date()): FinancialYear {
   const parts = Object.fromEntries(fmt.formatToParts(d).map(p => [p.type, p.value]));
   const year = Number(parts.year);
   const month = Number(parts.month); // 1..12
-  const yStart = month >= 7 ? year : year - 1;
-  const label = `${yStart}-${(yStart + 1).toString().slice(-2)}` as FinancialYear; // e.g., 2025-26
-  return (label in AU_RATES ? label : '2024-25');
+  return fyFromYearMonth(year, month);
 }
 
 export function getAuDefaults(): { fy: FinancialYear; cap: number; sg: number; brackets: Bracket[] } {
   const fy = currentFYNowMelbourne();
+  const r = AU_RATES[fy];
+  return { fy, cap: r.concessionalCap, sg: r.sgRate, brackets: r.taxBrackets };
+}
+
+/** Deterministic defaults for tests (no Date/Intl). */
+export function defaultsForYearMonth(year: number, month1to12: number) {
+  const fy = fyFromYearMonth(year, month1to12);
   const r = AU_RATES[fy];
   return { fy, cap: r.concessionalCap, sg: r.sgRate, brackets: r.taxBrackets };
 }

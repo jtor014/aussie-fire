@@ -1,16 +1,20 @@
-import { useMemo } from 'react';
+import { useRef } from 'react';
 import { getAuDefaults, type FinancialYear } from './auRates';
 
+/** Compute ATO rates once per session so values don't change at midnight on 1 July. */
 export function useATORates() {
-  return useMemo(() => {
-    const { fy, cap, sg, brackets } = getAuDefaults();
-    return {
-      financialYear: fy,
-      concessionalCap: cap,
-      superGuaranteeRate: sg,
-      taxBrackets: brackets
-    };
-  }, []); // No dependencies - only changes with date/time
+  const once = useRef<ReturnType<typeof getAuDefaults> | null>(null);
+  if (!once.current) {
+    once.current = getAuDefaults();
+  }
+  // Return a stable object instance for referential equality in React
+  const { fy, cap, sg, brackets } = once.current;
+  return {
+    financialYear: fy,
+    concessionalCap: cap,
+    superGuaranteeRate: sg,
+    taxBrackets: brackets
+  };
 }
 
 export function useConcessionalCap(): number {
