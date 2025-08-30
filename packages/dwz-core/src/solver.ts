@@ -56,11 +56,19 @@ export type BridgeResult = {
   covered: boolean;
 };
 
+export type FrontLoadResult = {
+  preSpend: number;       // S + Δ
+  postSpend: number;      // S
+  preUntilAge: number;    // inflowAccessAge
+  delta: number;          // Δ
+};
+
 export type SolveResult = {
   retireAge: number;
   sBase: number;          // sustainable base spending (real $/yr)
   bridge: BridgeResult;
   path: SolverPathPoint[];
+  frontLoad?: FrontLoadResult;
 };
 
 export type EarliestForPlanResult = {
@@ -84,6 +92,73 @@ function annualSpendFor(endOfYearAge: number, sBase: number, bands: Bands): numb
 
 function grow(x: number, r: number) {
   return x * (1 + r);
+}
+
+/** 
+ * Compute front-load uplift for post-retirement inflows.
+ * Returns delta spending uplift and the age until which it applies.
+ */
+function computeFrontLoadUplift(
+  retireAge: number, 
+  preserveAge: number,
+  inflows: Array<{ ageYou: number; amount: number; to?: 'outside' | 'super' }> | undefined,
+  realReturn: number
+): FrontLoadResult | null {
+  if (!inflows || inflows.length === 0) return null;
+  
+  // Find earliest accessible post-retirement inflow
+  let earliestAccessAge = Infinity;
+  let totalAmount = 0;
+  
+  for (const inflow of inflows) {
+    if (inflow.ageYou <= retireAge) continue; // Skip pre/at-retirement inflows
+    
+    const amount = Math.max(0, inflow.amount || 0);
+    if (amount <= 0) continue;
+    
+    // Determine when this inflow becomes accessible
+    const destination = inflow.to ?? 'outside';
+    const accessAge = destination === 'super' 
+      ? Math.max(inflow.ageYou, preserveAge) 
+      : inflow.ageYou;
+    
+    if (accessAge < earliestAccessAge) {
+      earliestAccessAge = accessAge;
+      totalAmount = amount;
+    } else if (Math.abs(accessAge - earliestAccessAge) < 1e-9) {
+      // Same access age - sum the amounts
+      totalAmount += amount;
+    }
+  }
+  
+  // No valid post-retirement inflow found
+  if (!isFinite(earliestAccessAge) || totalAmount <= 0) return null;
+  
+  // Calculate years gap
+  const n = earliestAccessAge - retireAge;
+  if (n <= 0) return null;
+  
+  // Calculate level uplift
+  let delta: number;
+  if (Math.abs(realReturn) < 1e-9) {
+    // g ≈ 0: simple division
+    delta = totalAmount / n;
+  } else {
+    // g ≠ 0: discounted annuity formula
+    const g = realReturn;
+    const pvFactor = Math.pow(1 + g, -n);
+    delta = (totalAmount * pvFactor) * (g / (1 - pvFactor));
+  }
+  
+  // Clamp to non-negative
+  delta = Math.max(0, delta);
+  
+  return {
+    preSpend: 0,  // Will be filled by caller with S + delta
+    postSpend: 0, // Will be filled by caller with S
+    preUntilAge: earliestAccessAge,
+    delta: Math.round(delta * 100) / 100 // Round to cents
+  };
 }
 
 /** Apply future inflows if trigger age is reached. Modifies outside/super in-place via reference parameters. */
@@ -282,11 +357,21 @@ export function findEarliestViable(inp: Inputs): SolveResult | null {
     if (covered) {
       // Build full path = accumulation + retirement (phase tags set)
       const path = [...acc.path, ...pathRetire];
+      
+      // Compute front-load uplift if applicable
+      const frontLoadCalc = computeFrontLoadUplift(A, inp.preserveAge, inp.futureInflows, inp.realReturn);
+      const frontLoad = frontLoadCalc ? {
+        ...frontLoadCalc,
+        preSpend: sBase + frontLoadCalc.delta,
+        postSpend: sBase
+      } : undefined;
+      
       return {
         retireAge: A,
         sBase,
         bridge: { years: Math.max(0, Math.min(inp.preserveAge, inp.lifeExp) - A), needPV, have, covered },
-        path
+        path,
+        frontLoad
       };
     }
     return null; // Forced age is not viable
@@ -307,11 +392,21 @@ export function findEarliestViable(inp: Inputs): SolveResult | null {
     if (covered) {
       // Build full path = accumulation + retirement (phase tags set)
       const path = [...acc.path, ...pathRetire];
+      
+      // Compute front-load uplift if applicable
+      const frontLoadCalc = computeFrontLoadUplift(A, inp.preserveAge, inp.futureInflows, inp.realReturn);
+      const frontLoad = frontLoadCalc ? {
+        ...frontLoadCalc,
+        preSpend: sBase + frontLoadCalc.delta,
+        postSpend: sBase
+      } : undefined;
+      
       return {
         retireAge: A,
         sBase,
         bridge: { years: Math.max(0, Math.min(inp.preserveAge, inp.lifeExp) - A), needPV, have, covered },
-        path
+        path,
+        frontLoad
       };
     }
   }

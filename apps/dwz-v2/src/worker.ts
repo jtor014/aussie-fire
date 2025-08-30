@@ -53,7 +53,8 @@ function handleComputeDecision(msg: Extract<WorkerMessage, { type: 'COMPUTE_DECI
         phase: "flat", // keep for compatibility
         lifecyclePhase: p.phase
       })),
-      recommendedSplit: { salarySacrifice: 0, outside: 0, note: "Stub: split optimization to be implemented (T-R2)" }
+      recommendedSplit: { salarySacrifice: 0, outside: 0, note: "Stub: split optimization to be implemented (T-R2)" },
+      frontLoad: solverResult.frontLoad // Pass through front-load data
     };
     
     (self as any).postMessage({ id: msg.id, ok: true, result });

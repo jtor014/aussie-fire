@@ -566,6 +566,13 @@ export default function App() {
               <div style={{ marginTop: 4 }}>
                 DWZ sustainable spending at age {planFirstData.earliestAge}: <strong>{auMoney0(Math.round(planFirstData.atAgeSpend || data.sustainableAnnual))}/yr</strong>
               </div>
+              
+              {/* Display front-load spending schedule if applicable */}
+              {data.frontLoad && (
+                <div style={{ marginTop: 8, padding: '8px 12px', background: '#d1fae5', borderRadius: 6 }}>
+                  <strong>Spending schedule:</strong> {auMoney0(Math.round(data.frontLoad.preSpend))}/yr until age {data.frontLoad.preUntilAge}, then {auMoney0(Math.round(data.frontLoad.postSpend))}/yr thereafter.
+                </div>
+              )}
             </div>
             
             <div style={{ marginTop: 8 }}>

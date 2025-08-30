@@ -60,6 +60,12 @@ export type DecisionDwz = {
   bridge: Bridge;
   path: PathPoint[];
   recommendedSplit: { salarySacrifice: number; outside: number; note: string };
+  frontLoad?: {
+    preSpend: number;       // S + Δ
+    postSpend: number;      // S
+    preUntilAge: number;    // inflowAccessAge
+    delta: number;          // Δ
+  };
 };
 
 // Optimizer types
