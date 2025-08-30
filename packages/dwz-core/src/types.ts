@@ -23,6 +23,12 @@ export type Household = {
   lifeExp: number;       // age (e.g., 90)
   annualSavings?: number; // simple pre-retirement savings budget (combined household, real $/yr)
   preFireSavingsSplit?: PreFireSavingsSplit; // optional savings split policy
+  /** Optional future inflows in today's dollars. Applied when 'you' reaches given age. */
+  futureInflows?: Array<{
+    ageYou: number;           // trigger when person 0 (You) reaches this age
+    amount: number;           // positive inflow; today's dollars
+    to?: 'outside' | 'super'; // default 'outside'
+  }>;
 };
 
 export type Assumptions = {

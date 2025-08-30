@@ -32,6 +32,13 @@ export type Inputs = {
   
   // Optional employer SG gross (combined across all people)
   employerSGGross?: number;
+
+  // Optional future inflows in today's dollars. Applied when 'you' reaches given age.
+  futureInflows?: Array<{
+    ageYou: number;           // trigger when person 0 (You) reaches this age
+    amount: number;           // positive inflow; today's dollars
+    to?: 'outside' | 'super'; // default 'outside'
+  }>;
 };
 
 export type SolverPathPoint = {
@@ -129,6 +136,24 @@ export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverP
       } else {
         // Backward-compatible: all to outside
         outside += totalSavings;
+      }
+    }
+
+    // Apply future inflows before growth if trigger age is reached
+    if (inp.futureInflows && inp.futureInflows.length > 0) {
+      for (const inflow of inp.futureInflows) {
+        // Check if current age matches trigger age (within small epsilon)
+        if (Math.abs(age - inflow.ageYou) < 1e-9) {
+          const amount = Math.max(0, inflow.amount || 0);
+          if (amount > 0) {
+            const destination = inflow.to ?? 'outside';
+            if (destination === 'outside') {
+              outside += amount;
+            } else {
+              sup += amount;
+            }
+          }
+        }
       }
     }
 

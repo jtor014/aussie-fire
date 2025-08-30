@@ -12,6 +12,8 @@ import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
 import PlanSpendInput from "./components/PlanSpendInput";
 import PersonCard from "./components/PersonCard";
+import SavingsBreakdown from "./components/SavingsBreakdown";
+import FutureLumpSumPanel from "./components/FutureLumpSumPanel";
 import { COUPLES_PLAN_DEFAULT, SINGLE_PLAN_DEFAULT } from "./constants/defaults";
 
 export default function App() {
@@ -42,6 +44,10 @@ export default function App() {
   const [manualTaxRate, setManualTaxRate] = useState(0.32);
   const autoTaxRate = useAutoMarginalTaxRate(income1, income2);
   const outsideTaxRate = useAdvancedTaxRate ? manualTaxRate : autoTaxRate;
+  
+  // Future inflows
+  const [futureInflowAmount, setFutureInflowAmount] = useState(0);
+  const [futureInflowAge, setFutureInflowAge] = useState(0);
   
   // Auto-derive eligible people from cap headroom
   const calculateEligiblePeople = () => {
@@ -124,8 +130,11 @@ export default function App() {
     },
     targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
     annualSavings,
-    lifeExp
-  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate]);
+    lifeExp,
+    futureInflows: futureInflowAmount > 0 && futureInflowAge > 0 ? [
+      { ageYou: futureInflowAge, amount: futureInflowAmount, to: 'outside' }
+    ] : undefined
+  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate, futureInflowAmount, futureInflowAge]);
   
   // Use plan-first optimizer when plan is set, otherwise fall back to generic optimizer
   const { data: genericOptimizerData, loading: genericOptimizerLoading } = useSavingsSplitOptimizer(
@@ -266,6 +275,13 @@ export default function App() {
         />
       </section>
 
+      <FutureLumpSumPanel
+        amount={futureInflowAmount}
+        ageYou={futureInflowAge}
+        onAmountChange={setFutureInflowAmount}
+        onAgeYouChange={setFutureInflowAge}
+      />
+
       <section style={{ 
         marginTop: 20, 
         display: "grid", 
@@ -293,6 +309,13 @@ export default function App() {
               marginTop: 4,
               fontFamily: 'inherit'
             }}
+          />
+          <SavingsBreakdown
+            annualSavings={annualSavings}
+            autoOptimize={autoOptimize}
+            optimizerData={optimizerData}
+            personalMTRs={personalMTRs}
+            allRemainingCaps={remainingCaps}
           />
         </label>
         <label style={{
@@ -436,6 +459,11 @@ export default function App() {
             {optimizerData && 'explanation' in optimizerData && optimizerData.explanation && (
               <div style={{ fontSize: 13, color: "#555", marginTop: 6, fontStyle: "italic" }}>
                 {optimizerData.explanation}
+              </div>
+            )}
+            {baseHousehold.futureInflows && baseHousehold.futureInflows.length > 0 && (
+              <div style={{ fontSize: 12, color: "#059669", marginTop: 6 }}>
+                Future inflow: <strong>A${(baseHousehold.futureInflows[0].amount || 0).toLocaleString('en-AU')}</strong> at age <strong>{baseHousehold.futureInflows[0].ageYou}</strong> ({baseHousehold.futureInflows[0].to ?? 'outside'}).
               </div>
             )}
             <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
