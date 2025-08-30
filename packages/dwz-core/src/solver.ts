@@ -86,6 +86,25 @@ function grow(x: number, r: number) {
   return x * (1 + r);
 }
 
+/** Apply future inflows if trigger age is reached. Modifies outside/super in-place via reference parameters. */
+function applyFutureInflows(inp: Inputs, age: number, outsideRef: { value: number }, superRef: { value: number }): void {
+  if (!inp.futureInflows || inp.futureInflows.length === 0) return;
+  
+  for (const inflow of inp.futureInflows) {
+    if (Math.abs(age - inflow.ageYou) < 1e-9) {
+      const amount = Math.max(0, inflow.amount || 0);
+      if (amount > 0) {
+        const destination = inflow.to ?? 'outside';
+        if (destination === 'outside') {
+          outsideRef.value += amount;
+        } else {
+          superRef.value += amount;
+        }
+      }
+    }
+  }
+}
+
 /** Accumulate balances from currentAge to retireAge (end-of-year semantics). */
 export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverPathPoint[]; outside: number; super: number; } {
   const path: SolverPathPoint[] = [];
@@ -140,22 +159,11 @@ export function accumulateUntil(inp: Inputs, retireAge: number): { path: SolverP
     }
 
     // Apply future inflows before growth if trigger age is reached
-    if (inp.futureInflows && inp.futureInflows.length > 0) {
-      for (const inflow of inp.futureInflows) {
-        // Check if current age matches trigger age (within small epsilon)
-        if (Math.abs(age - inflow.ageYou) < 1e-9) {
-          const amount = Math.max(0, inflow.amount || 0);
-          if (amount > 0) {
-            const destination = inflow.to ?? 'outside';
-            if (destination === 'outside') {
-              outside += amount;
-            } else {
-              sup += amount;
-            }
-          }
-        }
-      }
-    }
+    const outsideRef = { value: outside };
+    const superRef = { value: sup };
+    applyFutureInflows(inp, age, outsideRef, superRef);
+    outside = outsideRef.value;
+    sup = superRef.value;
 
     // grow both piles to end of year
     outside = grow(outside, inp.realReturn);
@@ -195,6 +203,13 @@ function simulateRetirement(
       const needLeft = spend - fromOutside;
       sup -= needLeft;
     }
+
+    // Apply future inflows before growth if trigger age is reached
+    const outsideRef = { value: outside };
+    const superRef = { value: sup };
+    applyFutureInflows(inp, nextAge, outsideRef, superRef);
+    outside = outsideRef.value;
+    sup = superRef.value;
 
     // grow both piles to end of year
     outside = grow(outside, inp.realReturn);
