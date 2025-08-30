@@ -50,6 +50,37 @@ describe('toCoreInput', () => {
     expect(core.futureInflows).toEqual([]);
   });
 
+  test('preserves multiple futureInflows with different destinations', () => {
+    const householdWithMultipleInflows: Household = {
+      ...mockHousehold,
+      futureInflows: [
+        { ageYou: 45, amount: 100000, to: 'outside' },
+        { ageYou: 50, amount: 200000, to: 'super' },
+        { ageYou: 55, amount: 50000 } // no 'to' field, should preserve as-is
+      ]
+    };
+
+    const core = toCoreInput(householdWithMultipleInflows, mockAssumptions);
+    
+    expect(core.futureInflows).toBeDefined();
+    expect(core.futureInflows?.length).toBe(3);
+    
+    // First inflow
+    expect(core.futureInflows?.[0]?.ageYou).toBe(45);
+    expect(core.futureInflows?.[0]?.amount).toBe(100000);
+    expect(core.futureInflows?.[0]?.to).toBe('outside');
+    
+    // Second inflow
+    expect(core.futureInflows?.[1]?.ageYou).toBe(50);
+    expect(core.futureInflows?.[1]?.amount).toBe(200000);
+    expect(core.futureInflows?.[1]?.to).toBe('super');
+    
+    // Third inflow (no 'to' field)
+    expect(core.futureInflows?.[2]?.ageYou).toBe(55);
+    expect(core.futureInflows?.[2]?.amount).toBe(50000);
+    expect(core.futureInflows?.[2]?.to).toBeUndefined();
+  });
+
   test('correctly converts household structure to solver input', () => {
     const core = toCoreInput(mockHousehold, mockAssumptions);
     

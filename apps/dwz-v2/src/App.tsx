@@ -13,7 +13,7 @@ import SensitivityChart from "./components/SensitivityChart";
 import PlanSpendInput from "./components/PlanSpendInput";
 import PersonCard from "./components/PersonCard";
 import SavingsBreakdown from "./components/SavingsBreakdown";
-import FutureLumpSumPanel from "./components/FutureLumpSumPanel";
+import FutureInflowsPanel from "./components/FutureInflowsPanel";
 import { COUPLES_PLAN_DEFAULT, SINGLE_PLAN_DEFAULT } from "./constants/defaults";
 
 export default function App() {
@@ -45,9 +45,12 @@ export default function App() {
   const autoTaxRate = useAutoMarginalTaxRate(income1, income2);
   const outsideTaxRate = useAdvancedTaxRate ? manualTaxRate : autoTaxRate;
   
-  // Future inflows
-  const [futureInflowAmount, setFutureInflowAmount] = useState(0);
-  const [futureInflowAge, setFutureInflowAge] = useState(0);
+  // Future inflows (multiple entries with destination)
+  const [futureInflows, setFutureInflows] = useState<Array<{
+    ageYou: number;
+    amount: number;
+    to?: 'outside' | 'super';
+  }>>([]);
   
   // Auto-derive eligible people from cap headroom
   const calculateEligiblePeople = () => {
@@ -131,10 +134,8 @@ export default function App() {
     targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
     annualSavings,
     lifeExp,
-    futureInflows: futureInflowAmount > 0 && futureInflowAge > 0 ? [
-      { ageYou: futureInflowAge, amount: futureInflowAmount, to: 'outside' }
-    ] : undefined
-  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate, futureInflowAmount, futureInflowAge]);
+    futureInflows: futureInflows.length > 0 ? futureInflows : undefined
+  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate, futureInflows]);
   
   // Use plan-first optimizer when plan is set, otherwise fall back to generic optimizer
   const { data: genericOptimizerData, loading: genericOptimizerLoading } = useSavingsSplitOptimizer(
@@ -275,11 +276,9 @@ export default function App() {
         />
       </section>
 
-      <FutureLumpSumPanel
-        amount={futureInflowAmount}
-        ageYou={futureInflowAge}
-        onAmountChange={setFutureInflowAmount}
-        onAgeYouChange={setFutureInflowAge}
+      <FutureInflowsPanel
+        value={futureInflows}
+        onChange={setFutureInflows}
       />
 
       <section style={{ 
@@ -463,7 +462,12 @@ export default function App() {
             )}
             {baseHousehold.futureInflows && baseHousehold.futureInflows.length > 0 && (
               <div style={{ fontSize: 12, color: "#059669", marginTop: 6 }}>
-                Future inflow: <strong>A${(baseHousehold.futureInflows[0].amount || 0).toLocaleString('en-AU')}</strong> at age <strong>{baseHousehold.futureInflows[0].ageYou}</strong> ({baseHousehold.futureInflows[0].to ?? 'outside'}).
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Future inflows:</div>
+                {baseHousehold.futureInflows.map((inf, i) => (
+                  <div key={i} style={{ marginLeft: 8 }}>
+                    • A${(inf.amount || 0).toLocaleString('en-AU')} at age {inf.ageYou} → {inf.to ?? 'outside'}
+                  </div>
+                ))}
               </div>
             )}
             <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
