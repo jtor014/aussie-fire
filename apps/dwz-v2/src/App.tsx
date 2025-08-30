@@ -6,11 +6,14 @@ import { useSavingsSplitForPlan } from "./lib/useSavingsSplitForPlan";
 import { usePlanFirstSolver } from "./lib/usePlanFirstSolver";
 import { useConcessionalCap, useATORates, useAutoMarginalTaxRate } from "./lib/useATORates";
 import { calculateMarginalTaxRate } from "./lib/auRates";
+import { splitSalarySacrifice } from "./lib/suggestSalarySacrifice";
 import { auMoney0 } from "./lib/format";
 import WealthChart from "./components/WealthChart";
 import SensitivityChart from "./components/SensitivityChart";
 import PlanSpendInput from "./components/PlanSpendInput";
 import PersonCard from "./components/PersonCard";
+import SavingsBreakdown from "./components/SavingsBreakdown";
+import FutureLumpSumPanel from "./components/FutureLumpSumPanel";
 import { COUPLES_PLAN_DEFAULT, SINGLE_PLAN_DEFAULT } from "./constants/defaults";
 
 export default function App() {
@@ -41,6 +44,10 @@ export default function App() {
   const [manualTaxRate, setManualTaxRate] = useState(0.32);
   const autoTaxRate = useAutoMarginalTaxRate(income1, income2);
   const outsideTaxRate = useAdvancedTaxRate ? manualTaxRate : autoTaxRate;
+  
+  // Future inflows
+  const [futureInflowAmount, setFutureInflowAmount] = useState(0);
+  const [futureInflowAge, setFutureInflowAge] = useState(0);
   
   // Auto-derive eligible people from cap headroom
   const calculateEligiblePeople = () => {
@@ -123,8 +130,11 @@ export default function App() {
     },
     targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
     annualSavings,
-    lifeExp
-  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate]);
+    lifeExp,
+    futureInflows: futureInflowAmount > 0 && futureInflowAge > 0 ? [
+      { ageYou: futureInflowAge, amount: futureInflowAmount, to: 'outside' }
+    ] : undefined
+  }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate, futureInflowAmount, futureInflowAge]);
   
   // Use plan-first optimizer when plan is set, otherwise fall back to generic optimizer
   const { data: genericOptimizerData, loading: genericOptimizerLoading } = useSavingsSplitOptimizer(
@@ -265,6 +275,13 @@ export default function App() {
         />
       </section>
 
+      <FutureLumpSumPanel
+        amount={futureInflowAmount}
+        ageYou={futureInflowAge}
+        onAmountChange={setFutureInflowAmount}
+        onAgeYouChange={setFutureInflowAge}
+      />
+
       <section style={{ 
         marginTop: 20, 
         display: "grid", 
@@ -292,6 +309,13 @@ export default function App() {
               marginTop: 4,
               fontFamily: 'inherit'
             }}
+          />
+          <SavingsBreakdown
+            annualSavings={annualSavings}
+            autoOptimize={autoOptimize}
+            optimizerData={optimizerData}
+            personalMTRs={personalMTRs}
+            allRemainingCaps={remainingCaps}
           />
         </label>
         <label style={{
@@ -437,10 +461,33 @@ export default function App() {
                 {optimizerData.explanation}
               </div>
             )}
+            {baseHousehold.futureInflows && baseHousehold.futureInflows.length > 0 && (
+              <div style={{ fontSize: 12, color: "#059669", marginTop: 6 }}>
+                Future inflow: <strong>A${(baseHousehold.futureInflows[0].amount || 0).toLocaleString('en-AU')}</strong> at age <strong>{baseHousehold.futureInflows[0].ageYou}</strong> ({baseHousehold.futureInflows[0].to ?? 'outside'}).
+              </div>
+            )}
             <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
               Cap binding: {optimizerData.constraints.capBindingAtOpt ? "Yes" : "No"} | 
               Evaluations: {optimizerData.evals}
             </div>
+            
+            {(() => {
+              // Calculate per-person salary sacrifice split
+              const householdRecommendedGross = Math.max(0, Math.round(annualSavings * optimizerData.recommendedPct));
+              const splitAmounts = splitSalarySacrifice(householdRecommendedGross, remainingCaps, personalMTRs);
+              const totalSplit = splitAmounts.reduce((sum, amt) => sum + amt, 0);
+              
+              if (totalSplit > 0) {
+                return (
+                  <div style={{ fontSize: 12, color: "#333", marginTop: 6, padding: 4, background: "#fff3cd", borderRadius: 3, border: "1px solid #ffeaa7" }}>
+                    <strong>Salary-sacrifice this year: {auMoney0(totalSplit)} total</strong>
+                    {' — '}You {auMoney0(splitAmounts[0] || 0)} • Partner {auMoney0(splitAmounts[1] || 0)}
+                    <span style={{ color: "#856404", fontSize: 11 }}> (by MTR & cap)</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
             
             {data && (
               <div style={{ marginTop: 6, fontSize: 12, color: "#555", padding: 6, background: "#f8f9fa", borderRadius: 3 }}>

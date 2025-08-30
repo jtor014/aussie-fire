@@ -49,9 +49,10 @@ export function allocateConcessionalByMTR(
       
       if (alloc > eps) {
         const slot = result.perPerson.find(x => x.id === p.id)!;
-        slot.ssGross += alloc;
-        result.totalAllocated += alloc;
-        remaining -= alloc;
+        const roundedAlloc = Math.round(alloc);
+        slot.ssGross += roundedAlloc;
+        result.totalAllocated += roundedAlloc;
+        remaining -= alloc; // Use unrounded for remaining calculation to avoid accumulation errors
         p.headroom -= alloc;
       }
     }

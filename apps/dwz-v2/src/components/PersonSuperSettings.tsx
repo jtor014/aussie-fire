@@ -133,14 +133,21 @@ export default function PersonSuperSettings({
           {/* Visual cap usage bar */}
           <div style={{ marginTop: 6, fontSize: 10, color: '#9ca3af' }}>
             <div style={{ marginBottom: 2 }}>Cap usage:</div>
-            <div style={{ 
-              width: '100%', 
-              height: 8, 
-              background: '#f1f5f9', 
-              borderRadius: 4, 
-              overflow: 'hidden',
-              position: 'relative'
-            }}>
+            <div 
+              style={{ 
+                width: '100%', 
+                height: 8, 
+                background: '#f1f5f9', 
+                borderRadius: 4, 
+                overflow: 'hidden',
+                position: 'relative',
+                cursor: 'help'
+              }}
+              title={employerSGGross >= capPerPerson 
+                ? `Cap fully used by SG: ${auMoney0(employerSGGross)} of ${auMoney0(capPerPerson)}`
+                : `SG: ${auMoney0(employerSGGross)} + SS: ${auMoney0(recommendedForThisPerson)} = ${auMoney0(employerSGGross + recommendedForThisPerson)} of ${auMoney0(capPerPerson)} cap`
+              }
+            >
               {/* SG portion */}
               <div style={{
                 position: 'absolute',
