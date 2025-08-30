@@ -236,4 +236,105 @@ describe('future inflows', () => {
     expect(resultWith.outside - resultWithout.outside).toBeCloseTo(20_000, 0);
     expect(resultWith.super).toBeCloseTo(resultWithout.super, 0); // Super unchanged
   });
+
+  test('multiple inflows route to correct buckets', () => {
+    const inp: Inputs = {
+      currentAge: 40,
+      preserveAge: 60,
+      lifeExp: 90,
+      outside0: 50000,
+      super0: 100000,
+      realReturn: 0.05,
+      annualSavings: 0,
+      bands: [{ endAgeIncl: 89, multiplier: 1.0 }],
+      bequest: 0,
+      retireAge: 60,
+      futureInflows: [
+        { ageYou: 45, amount: 100000, to: 'outside' },
+        { ageYou: 46, amount: 80000, to: 'super' },
+        { ageYou: 50, amount: 50000 } // no 'to' specified, should default to outside
+      ]
+    };
+
+    const result = findEarliestViable(inp);
+    expect(result).toBeDefined();
+    
+    if (result) {
+      // Find path points at ages 45, 46, and 50
+      const y44 = result.path.find(p => p.age === 44);
+      const y45 = result.path.find(p => p.age === 45);
+      const y46 = result.path.find(p => p.age === 46);
+      const y50 = result.path.find(p => p.age === 50);
+      const y49 = result.path.find(p => p.age === 49);
+
+      expect(y44).toBeDefined();
+      expect(y45).toBeDefined();
+      expect(y46).toBeDefined();
+      expect(y50).toBeDefined();
+      expect(y49).toBeDefined();
+
+      if (y44 && y45 && y46 && y50 && y49) {
+        // Check that inflows were applied by comparing differences in balances
+        // Note: exact calculations are complex due to spending and growth interactions,
+        // so we verify that the inflows had positive impact
+        
+        // Outside should have increased significantly at age 45 due to 100k inflow
+        expect(y45.outside).toBeGreaterThan(y44.outside);
+        
+        // Super should have increased significantly at age 46 due to 80k inflow
+        expect(y46.super).toBeGreaterThan(y45.super);
+        
+        // Outside should have increased significantly at age 50 due to 50k inflow
+        expect(y50.outside).toBeGreaterThan(y49.outside);
+      }
+    }
+  });
+
+  test('super inflow before preservation age remains locked', () => {
+    const inp: Inputs = {
+      currentAge: 40,
+      preserveAge: 60,
+      lifeExp: 90,
+      outside0: 10000, // Very low outside balance
+      super0: 100000,
+      realReturn: 0.05,
+      annualSavings: 5000,
+      bands: [{ endAgeIncl: 89, multiplier: 1.0 }],
+      bequest: 0,
+      futureInflows: [
+        { ageYou: 45, amount: 200000, to: 'super' } // Large super inflow before preservation
+      ]
+    };
+
+    const result = findEarliestViable(inp);
+    expect(result).toBeDefined();
+    
+    if (result) {
+      // The super inflow should not help with bridge period
+      // So retirement age should still be limited by outside funds availability
+      expect(result.retireAge).toBeGreaterThanOrEqual(55); // Can't retire too early with low outside
+    }
+  });
+
+  test('handles empty and zero-amount inflows gracefully', () => {
+    const inp: Inputs = {
+      currentAge: 30,
+      preserveAge: 60,
+      lifeExp: 90,
+      outside0: 100000,
+      super0: 50000,
+      realReturn: 0.05,
+      annualSavings: 20000,
+      bands: [{ endAgeIncl: 89, multiplier: 1.0 }],
+      bequest: 0,
+      futureInflows: [
+        { ageYou: 45, amount: 0, to: 'outside' }, // Zero amount, should be ignored
+        { ageYou: 50, amount: -1000, to: 'super' } // Negative amount, should be ignored
+      ]
+    };
+
+    const result = findEarliestViable(inp);
+    expect(result).toBeDefined();
+    // Test should complete without errors, zero/negative amounts are safely ignored
+  });
 });
