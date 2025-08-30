@@ -134,7 +134,16 @@ export default function App() {
     targetSpend: 65000, // placeholder - solver will determine actual sustainable spending
     annualSavings,
     lifeExp,
-    futureInflows: futureInflows.length > 0 ? futureInflows : undefined
+    futureInflows: (() => {
+      const validInflows = futureInflows
+        .filter(inf => inf.amount > 0 && inf.ageYou > 0 && Number.isFinite(inf.amount) && Number.isFinite(inf.ageYou))
+        .map(inf => ({
+          ageYou: inf.ageYou,
+          amount: inf.amount,
+          to: inf.to || 'outside'
+        }));
+      return validInflows.length > 0 ? validInflows : undefined;
+    })()
   }), [p1Age, p2Age, income1, income2, out1, out2, sup1, sup2, sgRate1, sgRate2, annualSavings, lifeExp, atoRates.superGuaranteeRate, futureInflows]);
   
   // Use plan-first optimizer when plan is set, otherwise fall back to generic optimizer
