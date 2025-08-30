@@ -337,4 +337,34 @@ describe('future inflows', () => {
     expect(result).toBeDefined();
     // Test should complete without errors, zero/negative amounts are safely ignored
   });
+
+  test('handles multiple inflows in the same year without errors', () => {
+    const inp: Inputs = {
+      currentAge: 40,
+      preserveAge: 60,
+      lifeExp: 90,
+      outside0: 100000,
+      super0: 50000,
+      realReturn: 0.05,
+      annualSavings: 10000,
+      bands: [{ endAgeIncl: 89, multiplier: 1.0 }],
+      bequest: 0,
+      retireAge: 60,
+      futureInflows: [
+        { ageYou: 50, amount: 80000, to: 'outside' }, // First inflow at age 50
+        { ageYou: 50, amount: 70000, to: 'super' },   // Second inflow at age 50  
+        { ageYou: 50, amount: 50000, to: 'outside' }  // Third inflow at age 50
+      ]
+    };
+
+    const result = findEarliestViable(inp);
+    expect(result).toBeDefined();
+    
+    // Just verify the solver handles multiple inflows without crashing
+    // The complex interaction with spending makes exact balance predictions difficult
+    if (result) {
+      expect(result.path.length).toBeGreaterThan(0);
+      expect(result.retireAge).toBeGreaterThan(0);
+    }
+  });
 });
