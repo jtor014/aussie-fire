@@ -31,6 +31,7 @@ A comprehensive React-based calculator for Australians pursuing Financial Indepe
 - **Visual Comparisons**: Side-by-side strategy impact charts
 
 ### Enhanced Features  
+- **Future Inflows**: Model inheritances, windfalls, or other income sources with multi-entry support
 - **Save & Share**: Save settings locally and generate shareable URLs with all parameters
 - **Interactive Charts**: Wealth projection with dynamic reference lines and tooltips
 - **Tax Complexity**: Private health insurance impact and effective tax rate display
@@ -46,6 +47,7 @@ A comprehensive React-based calculator for Australians pursuing Financial Indepe
 - **Bridge Period Validation**: Enforces outside-super-only constraint before preservation age (60)
 - **Unified Interface**: Simplified DWZ-only mode without confusing target-age flows
 - **Earliest FIRE Focus**: Binary search to find minimum retirement age for target spending
+- **Future Inflows**: Model post-retirement income sources (inheritances, windfalls) with proper timing
 - **Bequest Planning**: Comprehensive bequest target support with life expectancy calculations
 - **Real Dollar Consistency**: All calculations in inflation-adjusted terms
 
@@ -128,8 +130,9 @@ All financial calculations use `decimal.js-light` (v2.5.1) to ensure precision a
 - **Global Banner Integration**: ✅ Complete - Shows base sustainable spending with age-band context
 - **Bridge Constraint Solver**: ✅ Complete - Enforces outside-money-only constraint during bridge period
 - **Bridge Math Consistency**: ✅ Complete - Unified bridge assessment ensures banner and chip consistency
+- **Future Inflows**: ✅ Complete - Multi-entry support with post-retirement sustainable spending integration
 - **Bequest Planning**: ✅ Complete - Comprehensive bequest target support across all scenarios
-- **Test Coverage**: ✅ 280+ tests passing, including bridge consistency validation
+- **Test Coverage**: ✅ 285+ tests passing, including post-retirement inflows and bridge consistency validation
 
 ### Future Enhancements
 
@@ -139,6 +142,7 @@ All financial calculations use `decimal.js-light` (v2.5.1) to ensure precision a
 - [x] ~~Global results banner~~ ✅ (T-010 - Prominent retirement status display)
 - [x] ~~DWZ-only mode~~ ✅ (T-010 - Removed SWR toggle, DWZ is primary methodology)
 - [x] ~~Save/load scenarios~~ ✅ (localStorage + URL sharing)
+- [x] ~~Future inflows modeling~~ ✅ (Multi-entry inheritances/windfalls with post-retirement integration)
 - [ ] Three-segment couples preservation age handling
 - [ ] Capital gains tax considerations
 - [ ] Franking credits modeling  

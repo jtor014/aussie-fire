@@ -5,6 +5,36 @@ All notable changes to the Australian FIRE Calculator project will be documented
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2025-08-30
+
+### Major Changes - T-022: Post-Retirement Inflows Integration
+- **NEW**: Multi-entry future inflows panel supporting multiple inheritances, windfalls, and income sources
+- **BREAKING**: Post-retirement inflows now properly increase sustainable spending calculations (was ignored before)
+- **ENHANCED**: Comprehensive destination selection (outside vs super) with preservation age awareness
+
+### Added
+- **Future Inflows Panel**: Multi-entry interface with add/remove functionality for modeling future income
+- **Post-Retirement Integration**: Inflows during retirement phases now correctly boost sustainable spending
+- **Enhanced Solver Logic**: Extracted reusable `applyFutureInflows()` helper for both accumulation and retirement phases
+- **Comprehensive Testing**: Added 19+ tests covering post-retirement scenarios, edge cases, and validation
+- **Cache Fix**: Fixed React useMemo dependency to properly invalidate when futureInflows change
+
+### Changed
+- **Core Solver**: Modified `simulateRetirement()` to apply inflows before growth in each retirement year
+- **Accumulation Logic**: Refactored `accumulateUntil()` to use unified inflow application helper
+- **Test Coverage**: Enhanced existing monotonicity test to handle complex inflow timing effects
+
+### Fixed
+- **Critical Bug**: Post-retirement inflows (e.g., inheritance at age 70) were completely ignored in spending calculations
+- **Cache Invalidation**: Multi-inflow changes now properly trigger recalculation in React UI
+- **Test Reliability**: Fixed flaky monotonicity test by using more realistic inflow scenarios
+
+### Technical
+- Created `applyFutureInflows(inp, age, outsideRef, superRef)` helper function
+- Enhanced `simulateRetirement()` with inflow application before growth step
+- Updated `accumulateUntil()` to use consistent inflow logic
+- Added comprehensive test suite: `__tests__/futureInflows.test.ts`
+
 ## [0.4.1] - 2025-08-23
 
 ### Major Changes - T-021: Bridge Math Consistency Fix

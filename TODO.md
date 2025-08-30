@@ -1,6 +1,13 @@
 # TODO List for Australian FIRE Calculator
 
 ## ✅ COMPLETED - Foundation Architecture  
+- ✅ **T-022: POST-RETIREMENT INFLOWS INTEGRATION** (Aug 2025) - 🚀 MAJOR FEATURE
+  - ✅ **Multi-Entry Future Inflows** - Support multiple inheritances, windfalls, or other income sources
+  - ✅ **Post-Retirement Integration** - Inflows during retirement properly increase sustainable spending
+  - ✅ **Destination Selection** - Route inflows to outside or super accounts with preservation rules
+  - ✅ **Enhanced Solver Logic** - Extracted reusable inflow application for both accumulation and retirement phases
+  - ✅ **Comprehensive Testing** - 19+ tests covering various post-retirement scenarios and edge cases
+  - ✅ **Cache Invalidation Fix** - Fixed React useMemo to properly invalidate when futureInflows change
 - ✅ **T-021: BRIDGE MATH CONSISTENCY FIX** (Aug 2025) - 🔧 CRITICAL FIX
   - ✅ **Unified Bridge Assessment** - Single source of truth for bridge calculations
   - ✅ **Consistent UI Components** - GlobalBanner and BridgeChip now use same math
@@ -37,12 +44,13 @@
   - Show impact on retirement age
   - "Die with $X" instead of zero
   
-- [ ] **Lump Sum Events**
-  - Add windfall/inheritance input with date
-  - Property sale proceeds with CGT calculation
-  - Redundancy payment handling
-  - Show impact on retirement timeline
-  - Tax optimization strategies for lump sums
+- [x] ~~**Lump Sum Events**~~ ✅ (T-022: Future Inflows implemented)
+  - ✅ Windfall/inheritance input with trigger age
+  - ✅ Multi-entry support for multiple events
+  - ✅ Destination selection (outside vs super)
+  - ✅ Impact on retirement timeline and sustainable spending
+  - [ ] Property sale proceeds with CGT calculation (future enhancement)
+  - [ ] Tax optimization strategies for lump sums (future enhancement)
 
 - [ ] Monte Carlo simulation for risk analysis
 - [ ] Deploy to GitHub Pages or Vercel
@@ -86,6 +94,12 @@
 - [ ] Create video walkthrough
 
 ## Recent Major Updates
+- ✅ **T-022: Post-Retirement Inflows Integration** (Aug 2025) 🚀
+  - **NEW**: Multi-entry future inflows panel with add/remove functionality
+  - **ENHANCED**: Post-retirement inflows now properly increase sustainable spending calculations
+  - **FIXED**: React cache invalidation issue causing inflows to appear ineffective
+  - **IMPROVED**: Comprehensive test coverage with 19+ scenarios including edge cases
+  - **TECHNICAL**: Extracted reusable inflow logic for both accumulation and retirement phases
 - ✅ **T-010: DWZ-Only Mode Transformation** (Aug 2025) 🚀
   - **BREAKING**: Removed Safe Withdrawal Rate toggle - Die-With-Zero is now primary planning approach
   - **NEW**: GlobalBanner component displays real-time retirement status prominently
