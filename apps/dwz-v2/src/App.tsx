@@ -188,7 +188,7 @@ export default function App() {
       ...baseHousehold,
       preFireSavingsSplit
     };
-  }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings, outsideTaxRate]);
+  }, [baseHousehold, autoOptimize, optimizerData, manualSplitPct, capPerPerson, eligiblePeople, annualSavings, outsideTaxRate, futureInflows]);
 
   // Use the SAME household for plan-first solver to ensure consistency
   const { data: planFirstData, loading: planFirstLoading } = usePlanFirstSolver(
